@@ -1,5 +1,5 @@
-name: campaign_app
-description: "A new Flutter project."
+name: charity
+description: "App facilitating transfer and management of donations and volunteers by organizations"
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -19,7 +19,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 version: 1.0.0+1
 
 environment:
-  sdk: ^3.8.1
+  sdk: ^3.6.0
 
 # Dependencies specify other packages that your package needs in order to work.
 # To automatically upgrade your package dependencies to the latest versions
@@ -34,6 +34,26 @@ dependencies:
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
+  firebase_core: ^3.13.0
+  cloud_firestore: ^5.6.7
+  firebase_auth: ^5.5.3
+  firebase_analytics: ^11.4.5
+  shared_preferences: ^2.5.3
+  smooth_page_indicator: ^1.1.0
+  file_picker: ^10.1.7
+  firebase_storage: ^12.4.5
+  flutter_svg: ^2.1.0
+  image_picker: ^1.0.4
+  google_fonts: ^6.1.0
+  carousel_slider: ^5.0.0
+  url_launcher: ^6.2.5
+  pdf: ^3.10.4
+  printing: ^5.11.0
+  intl: ^0.20.2
+  lottie: ^2.6.0
+  path_provider: ^2.1.2
+  share_plus: ^11.0.0
+  fl_chart: ^0.71.0
 
 dev_dependencies:
   flutter_test:
@@ -58,8 +78,10 @@ flutter:
   uses-material-design: true
 
   # To add assets to your application, add an assets section, like this:
-  # assets:
-  #   - images/a_dot_burr.jpeg
+  assets:
+      - assets/img/
+      - assets/icons/
+      - assets/
   #   - images/a_dot_ham.jpeg
 
   # An image asset can refer to one or more resolution-specific "variants", see
