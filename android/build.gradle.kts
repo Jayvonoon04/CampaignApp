@@ -15,6 +15,18 @@ subprojects {
 subprojects {
     project.evaluationDependsOn(":app")
 }
+subprojects {
+    tasks.withType<JavaCompile>().configureEach {
+        // Force Java 11 everywhere
+        sourceCompatibility = JavaVersion.VERSION_11.toString()
+        targetCompatibility = JavaVersion.VERSION_11.toString()
+
+        // Suppress warnings about obsolete options
+        options.compilerArgs.add("-Xlint:-options")
+        //hide deprecated API warnings
+        options.compilerArgs.add("-Xlint:-deprecation")
+    }
+}
 
 tasks.register<Delete>("clean") {
     delete(rootProject.layout.buildDirectory)

@@ -1,7 +1,9 @@
 import 'package:charity/admin/admin_home.dart';
 import 'package:charity/admin/organizations.dart';
 import 'package:charity/admin/requests.dart';
+import 'package:charity/login.dart'; // ✅ Import your login page
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class AdminHome extends StatefulWidget {
   const AdminHome({super.key});
@@ -19,6 +21,16 @@ class _AdminHomeState extends State<AdminHome> {
     const AdminOrgsPage(),     // Organizations page
   ];
 
+  Future<void> _logout() async {
+    await FirebaseAuth.instance.signOut();
+    if (mounted) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const LoginPage()),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -33,6 +45,13 @@ class _AdminHomeState extends State<AdminHome> {
         elevation: 0,
         backgroundColor: Colors.transparent,
         foregroundColor: Colors.black87,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout, color: Colors.red),
+            tooltip: "Logout",
+            onPressed: _logout,
+          ),
+        ],
       ),
       body: PageView(
         controller: _pageController,
@@ -99,4 +118,3 @@ class _AdminHomeState extends State<AdminHome> {
     super.dispose();
   }
 }
-
