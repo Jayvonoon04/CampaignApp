@@ -33,7 +33,8 @@ class _OrgSettingsPageState extends State<OrgSettingsPage> {
     final userId = FirebaseAuth.instance.currentUser?.uid;
     if (userId == null) return;
 
-    final doc = await FirebaseFirestore.instance.collection('users').doc(userId).get();
+    final doc =
+    await FirebaseFirestore.instance.collection('users').doc(userId).get();
     final data = doc.data();
     if (data != null) {
       _nameController.text = data['name'] ?? '';
@@ -59,7 +60,9 @@ class _OrgSettingsPageState extends State<OrgSettingsPage> {
     try {
       final userId = FirebaseAuth.instance.currentUser?.uid;
       if (userId == null) return null;
-      final ref = FirebaseStorage.instance.ref().child('profile_photos/$userId.jpg');
+      final ref = FirebaseStorage.instance
+          .ref()
+          .child('profile_photos/$userId.jpg');
       await ref.putFile(file);
       return await ref.getDownloadURL();
     } catch (e) {
@@ -90,11 +93,18 @@ class _OrgSettingsPageState extends State<OrgSettingsPage> {
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Profile updated successfully!'), backgroundColor: Colors.green),
+        const SnackBar(
+            content: Text('Profile updated successfully!'),
+            backgroundColor: Colors.green),
       );
+
+      // ✅ Go back to previous page after update
+      Navigator.pop(context);
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error updating profile: $e'), backgroundColor: Colors.red),
+        SnackBar(
+            content: Text('Error updating profile: $e'),
+            backgroundColor: Colors.red),
       );
     } finally {
       setState(() => _loading = false);
@@ -110,6 +120,10 @@ class _OrgSettingsPageState extends State<OrgSettingsPage> {
         elevation: 1,
         centerTitle: true,
         automaticallyImplyLeading: false,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.black),
+          onPressed: () => Navigator.pop(context),
+        ),
       ),
       backgroundColor: const Color(0xFFF9FAFB),
       body: SingleChildScrollView(
@@ -125,18 +139,27 @@ class _OrgSettingsPageState extends State<OrgSettingsPage> {
                   backgroundColor: Colors.grey[300],
                   backgroundImage: _imageFile != null
                       ? FileImage(_imageFile!)
-                      : (_imageUrl != null ? NetworkImage(_imageUrl!) : null) as ImageProvider?,
+                      : (_imageUrl != null
+                      ? NetworkImage(_imageUrl!)
+                      : null)
+                  as ImageProvider?,
                   child: _imageFile == null && _imageUrl == null
-                      ? const Icon(Icons.camera_alt, size: 32, color: Colors.white)
+                      ? const Icon(Icons.camera_alt,
+                      size: 32, color: Colors.white)
                       : null,
                 ),
               ),
               const SizedBox(height: 24),
-              _buildInputField(controller: _nameController, label: 'Organization Name'),
+              _buildInputField(
+                  controller: _nameController, label: 'Organization Name'),
               const SizedBox(height: 16),
-              _buildInputField(controller: _locationController, label: 'Location'),
+              _buildInputField(
+                  controller: _locationController, label: 'Location'),
               const SizedBox(height: 16),
-              _buildInputField(controller: _phoneController, label: 'Phone', keyboardType: TextInputType.phone),
+              _buildInputField(
+                  controller: _phoneController,
+                  label: 'Phone',
+                  keyboardType: TextInputType.phone),
               const SizedBox(height: 24),
               SizedBox(
                 width: double.infinity,
@@ -146,11 +169,13 @@ class _OrgSettingsPageState extends State<OrgSettingsPage> {
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     backgroundColor: Colors.black,
                     foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
                   ),
                   child: _loading
                       ? const CircularProgressIndicator(color: Colors.white)
-                      : const Text('Update Profile', style: TextStyle(fontSize: 16)),
+                      : const Text('Update Profile',
+                      style: TextStyle(fontSize: 16)),
                 ),
               ),
             ],
@@ -168,7 +193,8 @@ class _OrgSettingsPageState extends State<OrgSettingsPage> {
     return TextFormField(
       controller: controller,
       keyboardType: keyboardType,
-      validator: (value) => value == null || value.isEmpty ? 'Please enter $label' : null,
+      validator: (value) =>
+      value == null || value.isEmpty ? 'Please enter $label' : null,
       decoration: InputDecoration(
         labelText: label,
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),

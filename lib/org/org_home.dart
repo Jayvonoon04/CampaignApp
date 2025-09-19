@@ -1,11 +1,8 @@
 import 'package:charity/org/campaigns.dart';
 import 'package:charity/org/dashboard.dart';
-import 'package:charity/org/donations.dart';
-import 'package:charity/org/linker.dart';
-import 'package:charity/org/settings.dart';
 import 'package:charity/utils/donation_exporter.dart';
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:charity/org/linker.dart';
 
 class OrgHome extends StatefulWidget {
   const OrgHome({super.key});
@@ -21,25 +18,8 @@ class _OrgHomeState extends State<OrgHome> {
   final List<Widget> _orgPages = [
     const OrgDashboardPage(),  // Dashboard
     const OrgCampaignsPage(),  // Campaigns
-    //const OrgDonationsPage(),  // Donations
-    const SettingsPage(),   // Settings
+    const SettingsPage(),        // Linker (instead of SettingsPage)
   ];
-
-  Future<void> check() async{
-    final prefs = await SharedPreferences.getInstance();
-    var verified =  prefs.get('verified');
-    if(verified == 'waiting'){
-      Navigator.pushReplacementNamed(context, '/WaitingVerification');
-    }else if(verified == 'verify'){
-      Navigator.pushReplacementNamed(context, '/VerifyAccount');
-    }
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    check();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -55,10 +35,7 @@ class _OrgHomeState extends State<OrgHome> {
         centerTitle: true,
         elevation: 0,
         backgroundColor: Colors.white,
-        actions: _selectedIndex == 1
-            ? [
-        ]
-            : null,
+        actions: _selectedIndex == 1 ? [] : null,
       ),
       body: PageView(
         controller: _pageController,
@@ -78,11 +55,14 @@ class _OrgHomeState extends State<OrgHome> {
 
   String _getAppBarTitle() {
     switch (_selectedIndex) {
-      case 0: return 'Dashboard';
-      case 1: return 'Campaigns';
-      //case 2: return 'Donations';
-      case 2: return 'Settings';
-      default: return 'Organization';
+      case 0:
+        return 'Dashboard';
+      case 1:
+        return 'Campaigns';
+      case 2:
+        return 'Settings'; // Title still shows "Settings"
+      default:
+        return 'Organization';
     }
   }
 
@@ -118,11 +98,6 @@ class _OrgHomeState extends State<OrgHome> {
               activeIcon: Icon(Icons.campaign),
               label: 'Campaigns',
             ),
-            // BottomNavigationBarItem(
-            //   icon: Icon(Icons.monetization_on_outlined),
-            //   activeIcon: Icon(Icons.monetization_on),
-            //   label: 'Donations',
-            // ),
             BottomNavigationBarItem(
               icon: Icon(Icons.settings_outlined),
               activeIcon: Icon(Icons.settings),
@@ -144,7 +119,6 @@ class _OrgHomeState extends State<OrgHome> {
   void _viewDonationStats() {
     DonationExporter.export(context);
   }
-
 
   @override
   void dispose() {
