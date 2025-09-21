@@ -1,18 +1,17 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'donate.dart';
+import 'checkout_page.dart';
 
 class DetailView extends StatelessWidget {
   final String id;
 
   const DetailView({super.key, required this.id});
 
+  /// Get organization (user) data directly from `users/{userId}`
   Stream<DocumentSnapshot> getOrgData(String userId) {
     return FirebaseFirestore.instance
         .collection("users")
         .doc(userId)
-        .collection("org")
-        .doc("org")
         .snapshots();
   }
 
@@ -45,7 +44,6 @@ class DetailView extends StatelessWidget {
 
           final String title = data['title'] ?? 'No Title';
           final String desc = data['desc'] ?? 'No Description';
-          final String goal = data['goal'] ?? '';
           final double targetAmount = (data['targetAmount'] ?? 0).toDouble();
           final double fundsRaised = (data['fundsRaised'] ?? 0).toDouble();
           final String userId = data['userid'] ?? '';
@@ -76,16 +74,20 @@ class DetailView extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          // Banner Image
                           ClipRRect(
                             borderRadius: BorderRadius.circular(16),
                             child: Image.network(
-                              data['banner'] ?? 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQPoQskEk1fiLX-JBYP5ut55b6PzinJ0PRQag&s',
+                              data['banner'] ??
+                                  'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQPoQskEk1fiLX-JBYP5ut55b6PzinJ0PRQag&s',
                               width: double.infinity,
                               height: 200,
                               fit: BoxFit.cover,
                             ),
                           ),
                           const SizedBox(height: 24),
+
+                          // Raised vs Goal Progress
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
@@ -110,33 +112,85 @@ class DetailView extends StatelessWidget {
                             children: [
                               Text("\$${fundsRaised.toStringAsFixed(2)}",
                                   style: const TextStyle(
-                                      fontWeight: FontWeight.bold, fontSize: 16)),
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16)),
                               Text("\$${targetAmount.toStringAsFixed(2)}",
                                   style: const TextStyle(
-                                      fontWeight: FontWeight.bold, fontSize: 16)),
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16)),
                             ],
                           ),
                           const SizedBox(height: 24),
-                          Text(desc,
-                              style: const TextStyle(
-                                  fontSize: 16, height: 1.4, color: Colors.black)),
+
+                          // Description
+                          Text(
+                            desc,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              height: 1.4,
+                              color: Colors.black,
+                            ),
+                          ),
                           const SizedBox(height: 24),
+
                           const Divider(),
                           const SizedBox(height: 16),
+
+                          // Organization Details
                           Text("Organization Details",
-                              style: TextStyle(
+                              style: const TextStyle(
                                   fontWeight: FontWeight.bold,
                                   fontSize: 18,
                                   color: Colors.black)),
-                          const SizedBox(height: 8),
+                          const SizedBox(height: 12),
+
                           if (orgData != null) ...[
-                            Text("Name: ${orgData['name'] ?? 'N/A'}"),
-                            Text("Email: ${orgData['email'] ?? 'N/A'}"),
-                            Text("Phone: ${orgData['phone'] ?? 'N/A'}"),
-                            Text("Website: ${orgData['website'] ?? 'N/A'}"),
-                            Text("Location: ${orgData['location'] ?? 'N/A'}"),
-                          ],
+                            Center(
+                              child: Column(
+                                children: [
+                                  CircleAvatar(
+                                    radius: 40,
+                                    backgroundImage: orgData['photo'] != null
+                                        ? NetworkImage(orgData['photo'])
+                                        : null,
+                                    child: orgData['photo'] == null
+                                        ? const Icon(Icons.person, size: 40)
+                                        : null,
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Text(
+                                        orgData['name'] ?? 'N/A',
+                                        style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 16),
+                                      ),
+                                      if (orgData['verified'] == "true")
+                                        const Padding(
+                                          padding: EdgeInsets.only(left: 6),
+                                          child: Icon(Icons.verified,
+                                              color: Colors.blue, size: 18),
+                                        ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text("Email: ${orgData['email'] ?? 'N/A'}"),
+                                  Text("Phone: ${orgData['phone'] ?? 'N/A'}"),
+                                  Text(
+                                      "Location: ${orgData['location'] ?? 'N/A'}"),
+                                ],
+                              ),
+                            ),
+                          ] else
+                            const Center(
+                              child: Text("No organization details found."),
+                            ),
+
                           const SizedBox(height: 24),
+
+                          // Donate Button
                           Center(
                             child: SizedBox(
                               width: double.infinity,
@@ -144,7 +198,8 @@ class DetailView extends StatelessWidget {
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: Colors.black,
                                   foregroundColor: Colors.white,
-                                  padding: const EdgeInsets.symmetric(vertical: 16),
+                                  padding:
+                                  const EdgeInsets.symmetric(vertical: 16),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(12),
                                   ),
@@ -153,8 +208,9 @@ class DetailView extends StatelessWidget {
                                   Navigator.push(
                                     context,
                                     MaterialPageRoute(
-                                      builder: (_) => DonationPaymentPage(
-                                          donationTitle: title, id: id),
+                                      builder: (_) => CheckoutPage(
+                                        id: id,
+                                      ),
                                     ),
                                   );
                                 },

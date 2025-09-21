@@ -22,7 +22,8 @@ class _PrevVolunteeringPageState extends State<PrevVolunteeringPage> {
 
   Future<List<Map<String, dynamic>>> _fetchUserVolunteeringEvents() async {
     final now = DateTime.now();
-    int totalHours = 0;
+    double totalHours = 0.0;
+
     final querySnapshot = await FirebaseFirestore.instance
         .collection('volunteering')
         .orderBy('date', descending: true)
@@ -43,17 +44,23 @@ class _PrevVolunteeringPageState extends State<PrevVolunteeringPage> {
         final eventData = doc.data();
         final Timestamp timestamp = eventData['date'];
         final eventDate = timestamp.toDate();
-        print('here');
 
         // Only include past events
         if (eventDate.isBefore(now)) {
           final userData = userDoc.data()!;
-          final duration = eventData['duration'] ?? 0;
+          // ✅ Always cast duration into double
+          final double duration =
+          (eventData['duration'] is int)
+              ? (eventData['duration'] as int).toDouble()
+              : (eventData['duration'] is double)
+              ? eventData['duration'] as double
+              : double.tryParse(eventData['duration'].toString()) ?? 0.0;
+
           if (userData['attended'].toString() == 'true') {
-            totalHours += int.tryParse(duration.toString()) ?? 0;
+            totalHours += duration;
           }
 
-          var eventDate = eventData['date'] is Timestamp
+          var parsedDate = eventData['date'] is Timestamp
               ? (eventData['date'] as Timestamp).toDate()
               : eventData['date'] is String
               ? DateTime.tryParse(eventData['date']) ?? DateTime.now()
@@ -62,14 +69,15 @@ class _PrevVolunteeringPageState extends State<PrevVolunteeringPage> {
           userEvents.add({
             'eventId': eventId,
             'title': eventData['title'] ?? '',
-            'date': eventDate,
+            'date': parsedDate,
             'location': eventData['location'] ?? '',
             'desc': eventData['desc'] ?? '',
             'duration': duration,
+            'start_time': eventData['start_time'] ?? '', // ✅ added
+            'end_time': eventData['end_time'] ?? '',     // ✅ added
             'status': userData['status'] ?? 'pending',
           });
         }
-
       }
     }
 
@@ -100,7 +108,8 @@ class _PrevVolunteeringPageState extends State<PrevVolunteeringPage> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: const [
-                    Icon(Icons.history_toggle_off, size: 60, color: Colors.grey),
+                    Icon(Icons.history_toggle_off,
+                        size: 60, color: Colors.grey),
                     SizedBox(height: 12),
                     Text(
                       'You have not participated in any volunteering events yet.',
@@ -115,32 +124,38 @@ class _PrevVolunteeringPageState extends State<PrevVolunteeringPage> {
 
           final events = snapshot.data!;
           final summary = events.first['summary'];
-          final totalHours = summary['totalHours'];
+          final double totalHours = summary['totalHours'];
           final actualEvents = events.sublist(1);
 
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
               Card(
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
                 elevation: 3,
                 color: Colors.green.shade50,
                 child: Padding(
                   padding: const EdgeInsets.all(16),
                   child: Row(
                     children: [
-                      const Icon(Icons.access_time_filled, color: Colors.green, size: 40),
+                      const Icon(Icons.access_time_filled,
+                          color: Colors.green, size: 40),
                       const SizedBox(width: 16),
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const Text(
                             'Total Hours Volunteered',
-                            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                            style: TextStyle(
+                                fontSize: 14, fontWeight: FontWeight.w500),
                           ),
                           Text(
-                            '$totalHours hours',
-                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                            totalHours % 1 == 0
+                                ? '${totalHours.toInt()} hours'
+                                : '${totalHours.toString()} hours',
+                            style: const TextStyle(
+                                fontSize: 18, fontWeight: FontWeight.bold),
                           ),
                         ],
                       ),
@@ -175,16 +190,19 @@ class _PrevVolunteeringPageState extends State<PrevVolunteeringPage> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Icon(Icons.volunteer_activism, color: Colors.deepPurple),
+                            const Icon(Icons.volunteer_activism,
+                                color: Colors.deepPurple),
                             const SizedBox(height: 8),
                             Text(
                               event['title'],
-                              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                              style: const TextStyle(
+                                  fontSize: 16, fontWeight: FontWeight.bold),
                             ),
                             const SizedBox(height: 4),
                             Text(
                               event['location'],
-                              style: const TextStyle(fontSize: 13, color: Colors.black54),
+                              style: const TextStyle(
+                                  fontSize: 13, color: Colors.black54),
                             ),
                             const SizedBox(height: 4),
                             Text(
@@ -193,11 +211,23 @@ class _PrevVolunteeringPageState extends State<PrevVolunteeringPage> {
                             ),
                             const SizedBox(height: 4),
                             Text(
+                              'Time: ${event['start_time']} - ${event['end_time']}',
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Duration: ${event['duration'] % 1 == 0 ? event['duration'].toInt() : event['duration']} hours',
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
                               'Status: ${event['status']}',
                               style: TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w500,
-                                color: event['status'] == 'attended' ? Colors.green : Colors.orange,
+                                color: event['status'] == 'attended'
+                                    ? Colors.green
+                                    : Colors.orange,
                               ),
                             ),
                           ],

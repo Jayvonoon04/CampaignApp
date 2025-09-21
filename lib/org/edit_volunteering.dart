@@ -13,13 +13,14 @@ class _EditVolunteeringPageState extends State<EditVolunteeringPage> {
   final _formKey = GlobalKey<FormState>();
 
   late TextEditingController _titleController;
-  late TextEditingController _categoryController;
   late TextEditingController _descController;
   late TextEditingController _locationController;
   late TextEditingController _durationController;
   late TextEditingController _targetUsersController;
 
   DateTime? _selectedDate;
+  TimeOfDay? _startTime;
+  TimeOfDay? _endTime;
   bool _live = false;
 
   bool _isSaving = false;
@@ -29,7 +30,6 @@ class _EditVolunteeringPageState extends State<EditVolunteeringPage> {
     super.initState();
     final data = widget.data;
     _titleController = TextEditingController(text: data['title'] ?? '');
-    _categoryController = TextEditingController(text: data['category'] ?? '');
     _descController = TextEditingController(text: data['desc'] ?? '');
     _locationController = TextEditingController(text: data['location'] ?? '');
     _durationController = TextEditingController(text: data['duration']?.toString() ?? '');
@@ -38,18 +38,33 @@ class _EditVolunteeringPageState extends State<EditVolunteeringPage> {
     final Timestamp? ts = data['date'];
     _selectedDate = ts != null ? ts.toDate() : null;
 
+    // restore start & end times
+    if (data['start_time'] != null) {
+      _startTime = _parseTimeOfDay(data['start_time']);
+    }
+    if (data['end_time'] != null) {
+      _endTime = _parseTimeOfDay(data['end_time']);
+    }
+
     _live = data['live'].toString().toLowerCase() == 'true';
   }
 
   @override
   void dispose() {
     _titleController.dispose();
-    _categoryController.dispose();
     _descController.dispose();
     _locationController.dispose();
     _durationController.dispose();
     _targetUsersController.dispose();
     super.dispose();
+  }
+
+  TimeOfDay? _parseTimeOfDay(String time) {
+    final parts = time.split(":");
+    if (parts.length != 2) return null;
+    int hour = int.tryParse(parts[0]) ?? 0;
+    int minute = int.tryParse(parts[1].replaceAll(RegExp(r'[^0-9]'), "")) ?? 0;
+    return TimeOfDay(hour: hour, minute: minute);
   }
 
   Future<void> _pickDate() async {
@@ -67,11 +82,41 @@ class _EditVolunteeringPageState extends State<EditVolunteeringPage> {
     }
   }
 
+  Future<void> _pickStartTime() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: _startTime ?? TimeOfDay.now(),
+    );
+    if (picked != null) {
+      setState(() {
+        _startTime = picked;
+      });
+    }
+  }
+
+  Future<void> _pickEndTime() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: _endTime ?? TimeOfDay.now(),
+    );
+    if (picked != null) {
+      setState(() {
+        _endTime = picked;
+      });
+    }
+  }
+
   Future<void> _saveChanges() async {
     if (!_formKey.currentState!.validate()) return;
     if (_selectedDate == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Please select a date")),
+      );
+      return;
+    }
+    if (_startTime == null || _endTime == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please select start and end time")),
       );
       return;
     }
@@ -86,12 +131,13 @@ class _EditVolunteeringPageState extends State<EditVolunteeringPage> {
 
       await FirebaseFirestore.instance.collection('volunteering').doc(eventId).update({
         'title': _titleController.text.trim(),
-        'category': _categoryController.text.trim(),
         'desc': _descController.text.trim(),
         'location': _locationController.text.trim(),
-        'duration': int.parse(_durationController.text.trim()),
-        'targetusers': int.parse(_targetUsersController.text.trim()),
+        'duration': double.tryParse(_durationController.text.trim()) ?? 0.0,
+        'targetusers': int.tryParse(_targetUsersController.text.trim()) ?? 0,
         'date': Timestamp.fromDate(_selectedDate!),
+        'start_time': _startTime!.format(context),
+        'end_time': _endTime!.format(context),
         'live': _live,
       });
 
@@ -101,7 +147,7 @@ class _EditVolunteeringPageState extends State<EditVolunteeringPage> {
         const SnackBar(content: Text("Event updated successfully")),
       );
 
-      Navigator.of(context).pop(); // Return to previous page
+      Navigator.of(context).pop();
 
     } catch (e) {
       if (!mounted) return;
@@ -119,7 +165,6 @@ class _EditVolunteeringPageState extends State<EditVolunteeringPage> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Scaffold(
       appBar: AppBar(
         title: const Text("Edit Volunteering"),
@@ -134,34 +179,23 @@ class _EditVolunteeringPageState extends State<EditVolunteeringPage> {
           key: _formKey,
           child: ListView(
             children: [
-              _buildTextField(_titleController, "Title", Icons.title, validator: (v) {
-                if (v == null || v.trim().isEmpty) return "Title is required";
-                return null;
-              }),
+              _buildTextField(_titleController, "Title", Icons.title,
+                  validator: (v) => v == null || v.trim().isEmpty ? "Title is required" : null),
               const SizedBox(height: 16),
-              _buildTextField(_categoryController, "Category", Icons.category, validator: (v) {
-                if (v == null || v.trim().isEmpty) return "Category is required";
-                return null;
-              }),
+              _buildTextField(_descController, "Description", Icons.description, maxLines: 3,
+                  validator: (v) => v == null || v.trim().isEmpty ? "Description is required" : null),
               const SizedBox(height: 16),
-              _buildTextField(_descController, "Description", Icons.description, maxLines: 3, validator: (v) {
-                if (v == null || v.trim().isEmpty) return "Description is required";
-                return null;
-              }),
-              const SizedBox(height: 16),
-              _buildTextField(_locationController, "Location", Icons.location_on, validator: (v) {
-                if (v == null || v.trim().isEmpty) return "Location is required";
-                return null;
-              }),
+              _buildTextField(_locationController, "Location", Icons.location_on,
+                  validator: (v) => v == null || v.trim().isEmpty ? "Location is required" : null),
               const SizedBox(height: 16),
               _buildTextField(
                 _durationController,
-                "Duration (hours)",
+                "Duration (hours, e.g. 1.5)",
                 Icons.timer,
                 keyboardType: TextInputType.number,
                 validator: (v) {
                   if (v == null || v.trim().isEmpty) return "Duration is required";
-                  if (int.tryParse(v.trim()) == null) return "Must be a number";
+                  if (double.tryParse(v.trim()) == null) return "Must be a number (e.g. 1.5)";
                   return null;
                 },
               ),
@@ -192,7 +226,34 @@ class _EditVolunteeringPageState extends State<EditVolunteeringPage> {
                 trailing: IconButton(
                   icon: const Icon(Icons.edit_calendar, color: Colors.black87),
                   onPressed: _pickDate,
-                  tooltip: "Pick Date",
+                ),
+              ),
+
+              // Start time picker
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.access_time, color: Colors.black54),
+                title: Text(
+                  _startTime == null ? "Select Start Time" : _startTime!.format(context),
+                  style: const TextStyle(fontSize: 16),
+                ),
+                trailing: IconButton(
+                  icon: const Icon(Icons.schedule, color: Colors.black87),
+                  onPressed: _pickStartTime,
+                ),
+              ),
+
+              // End time picker
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.access_time_filled, color: Colors.black54),
+                title: Text(
+                  _endTime == null ? "Select End Time" : _endTime!.format(context),
+                  style: const TextStyle(fontSize: 16),
+                ),
+                trailing: IconButton(
+                  icon: const Icon(Icons.schedule, color: Colors.black87),
+                  onPressed: _pickEndTime,
                 ),
               ),
 
@@ -254,17 +315,16 @@ class _EditVolunteeringPageState extends State<EditVolunteeringPage> {
       cursorColor: Colors.black87,
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: const TextStyle(color: Colors.black87),
         prefixIcon: Icon(icon, color: Colors.black54),
         filled: true,
         fillColor: Colors.white,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.grey.shade400),
+        ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: Colors.black87),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: Colors.grey.shade400),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),

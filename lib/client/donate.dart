@@ -6,8 +6,14 @@ import 'package:flutter/material.dart';
 class DonationPaymentPage extends StatefulWidget {
   final String donationTitle;
   final String id;
+  final double amount;
 
-  const DonationPaymentPage({super.key, required this.donationTitle, required this.id});
+  const DonationPaymentPage({
+    super.key,
+    required this.donationTitle,
+    required this.id,
+    required this.amount,
+  });
 
   @override
   State<DonationPaymentPage> createState() => _DonationPaymentPageState();
@@ -19,45 +25,83 @@ class _DonationPaymentPageState extends State<DonationPaymentPage> {
   final _expiryController = TextEditingController();
   final _cvvController = TextEditingController();
   final _nameController = TextEditingController();
-  final _amountController = TextEditingController();
+  late TextEditingController _amountController;
   bool _isLoading = false;
 
-  Future<void> saveData() async{
-    var doc = FirebaseFirestore.instance.collection("donations").doc(widget.id);
-    var payRef = FirebaseFirestore.instance.collection("payments").doc(DateTime.timestamp().microsecondsSinceEpoch.toString());
-    var document = await doc.get();
-    final notificationRef = FirebaseFirestore.instance
-        .collection("notifications")
-        .doc(DateTime.timestamp().microsecondsSinceEpoch.toString());
-    if(document.exists){
-      var data = document.data();
-      //make donation
-      await payRef.set({
-        'userid': FirebaseAuth.instance.currentUser?.uid,
-        'email': FirebaseAuth.instance.currentUser?.email,
-        'amount': _amountController.text,
-        'charityid': widget.id,
-        'date': DateTime.timestamp(),
-        'cname': data?['title'],
-        'cdesc': data?['desc']
-      });
-      //increment counter
-      var newAmount = int.parse(_amountController.text) + (data?['fundsRaised'] ?? 1);
-      await doc.update({
-        'fundsRaised': newAmount
-      });
-      //save notification
-      await notificationRef
-          .set({
-        'userid': FirebaseAuth.instance.currentUser?.uid,
-        'iconName': 'donation',
-        'title': 'Donation made to ${data?['title']}',
-        'message': 'Your donation has been received. Thanks a lot this donation will count toward making life better and wholesome',
-      });
-      //open page to show success
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (context) => const PaymentSuccess()),
-            (route) => false, // Remove all previous routes
+  @override
+  void initState() {
+    super.initState();
+    _amountController =
+        TextEditingController(text: widget.amount.toStringAsFixed(2));
+  }
+
+  @override
+  void dispose() {
+    _amountController.dispose();
+    _cardNumberController.dispose();
+    _expiryController.dispose();
+    _cvvController.dispose();
+    _nameController.dispose();
+    super.dispose();
+  }
+
+  Future<void> saveData() async {
+    try {
+      final doc =
+      FirebaseFirestore.instance.collection("donations").doc(widget.id);
+
+      final payRef = FirebaseFirestore.instance
+          .collection("payments")
+          .doc(DateTime.now().microsecondsSinceEpoch.toString());
+
+      final notificationRef = FirebaseFirestore.instance
+          .collection("notifications")
+          .doc(DateTime.now().microsecondsSinceEpoch.toString());
+
+      final document = await doc.get();
+
+      if (document.exists) {
+        final data = document.data();
+
+        // Save payment record
+        await payRef.set({
+          'userid': FirebaseAuth.instance.currentUser?.uid,
+          'email': FirebaseAuth.instance.currentUser?.email,
+          'amount': double.parse(_amountController.text),
+          'charityid': widget.id,
+          'created_by': data?['created_by'],
+          'date': FieldValue.serverTimestamp(),
+          'cname': data?['title'],
+          'cdesc': data?['desc'],
+        });
+
+        // Update donation total (store as double)
+        final currentRaised = (data?['fundsRaised'] ?? 0).toDouble();
+        final newAmount = currentRaised + double.parse(_amountController.text);
+        await doc.update({'fundsRaised': newAmount});
+
+        // Save notification
+        await notificationRef.set({
+          'userid': FirebaseAuth.instance.currentUser?.uid,
+          'iconName': 'donation',
+          'title': 'Donation made to ${data?['title']}',
+          'message':
+          'Your donation has been received. Thanks a lot, this donation will count toward making life better and wholesome',
+          'date': FieldValue.serverTimestamp(),
+        });
+
+        // Navigate to success page
+        if (mounted) {
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (context) => const PaymentSuccess()),
+                (route) => false,
+          );
+        }
+      }
+    } catch (e) {
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Payment failed: $e")),
       );
     }
   }
@@ -67,7 +111,7 @@ class _DonationPaymentPageState extends State<DonationPaymentPage> {
 
     setState(() => _isLoading = true);
     await saveData();
-    setState(() => _isLoading = false);
+    if (mounted) setState(() => _isLoading = false);
   }
 
   InputDecoration fieldDecoration(String label) {
@@ -79,7 +123,8 @@ class _DonationPaymentPageState extends State<DonationPaymentPage> {
         borderSide: const BorderSide(color: Colors.black),
         borderRadius: BorderRadius.circular(10),
       ),
-      contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+      contentPadding:
+      const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
     );
   }
 
@@ -109,8 +154,9 @@ class _DonationPaymentPageState extends State<DonationPaymentPage> {
                 controller: _cardNumberController,
                 keyboardType: TextInputType.number,
                 decoration: fieldDecoration("Card Number"),
-                validator: (val) =>
-                val == null || val.length < 16 ? "Enter a valid card number" : null,
+                validator: (val) => val == null || val.length < 16
+                    ? "Enter a valid card number"
+                    : null,
               ),
               const SizedBox(height: 16),
 
@@ -121,8 +167,8 @@ class _DonationPaymentPageState extends State<DonationPaymentPage> {
                       controller: _expiryController,
                       keyboardType: TextInputType.datetime,
                       decoration: fieldDecoration("MM/YY"),
-                      validator: (val) =>
-                      val == null || !RegExp(r"^(0[1-9]|1[0-2])\/\d{2}$").hasMatch(val)
+                      validator: (val) => val == null ||
+                          !RegExp(r"^(0[1-9]|1[0-2])\/\d{2}$").hasMatch(val)
                           ? "Invalid expiry"
                           : null,
                     ),
@@ -145,16 +191,18 @@ class _DonationPaymentPageState extends State<DonationPaymentPage> {
               TextFormField(
                 controller: _nameController,
                 decoration: fieldDecoration("Name on Card"),
-                validator: (val) => val == null || val.trim().isEmpty ? "Enter cardholder name" : null,
+                validator: (val) => val == null || val.trim().isEmpty
+                    ? "Enter cardholder name"
+                    : null,
               ),
 
               const SizedBox(height: 24),
 
               TextFormField(
                 controller: _amountController,
+                readOnly: true,
                 keyboardType: TextInputType.number,
                 decoration: fieldDecoration("Amount in RM"),
-                validator: (val) => val == null || val.trim().isEmpty ? "Cannot be empty" : null,
               ),
 
               const SizedBox(height: 24),
@@ -175,7 +223,8 @@ class _DonationPaymentPageState extends State<DonationPaymentPage> {
                       ? const SizedBox(
                     height: 20,
                     width: 20,
-                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                    child: CircularProgressIndicator(
+                        color: Colors.white, strokeWidth: 2),
                   )
                       : const Text("Donate"),
                 ),

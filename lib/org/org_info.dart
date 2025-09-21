@@ -15,11 +15,7 @@ class OrgInfoPage extends StatefulWidget {
 class _OrgInfoPageState extends State<OrgInfoPage> {
   final _formKey = GlobalKey<FormState>();
   final Map<String, TextEditingController> _controllers = {
-    'name': TextEditingController(),
     'website': TextEditingController(),
-    'email': TextEditingController(),
-    'phone': TextEditingController(),
-    'location': TextEditingController(),
     'address': TextEditingController(),
     'description': TextEditingController(),
   };
@@ -33,7 +29,13 @@ class _OrgInfoPageState extends State<OrgInfoPage> {
 
   Future<void> _fetchOrgData() async {
     if (_userId == null) return;
-    final doc = await FirebaseFirestore.instance.collection('users').doc(_userId).collection('org').doc('org').get();
+    final doc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(_userId)
+        .collection('org')
+        .doc('org')
+        .get();
+
     if (doc.exists) {
       final data = doc.data()!;
       for (var key in _controllers.keys) {
@@ -88,9 +90,11 @@ class _OrgInfoPageState extends State<OrgInfoPage> {
       bannerUrl = uploadedUrl;
     });
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Organization info saved successfully")),
-    );
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Organization info saved successfully")),
+      );
+    }
   }
 
   @override
@@ -109,100 +113,165 @@ class _OrgInfoPageState extends State<OrgInfoPage> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Colors.grey[50],
       appBar: AppBar(
-        title: const Text('Organization Info', style: TextStyle(color: Colors.black)),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
+        title: const Text(
+          'Organization Info',
+          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black),
+        ),
+        backgroundColor: Colors.white,
+        elevation: 1,
         iconTheme: const IconThemeData(color: Colors.black),
         centerTitle: true,
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(20),
         child: Form(
           key: _formKey,
           child: Column(
             children: [
-              if (_pickedImage != null)
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: Image.file(_pickedImage!, height: 180, fit: BoxFit.cover, width: double.infinity),
-                )
-              else if (bannerUrl != null)
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: Image.network(bannerUrl!, height: 180, fit: BoxFit.cover, width: double.infinity),
-                )
-              else
-                Container(
-                  height: 180,
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade200,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Center(child: Text("No Banner Uploaded")),
+              // Banner card
+              Card(
+                elevation: 2,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
                 ),
-              const SizedBox(height: 12),
-              ElevatedButton.icon(
-                onPressed: _pickImage,
-                icon: const Icon(Icons.upload),
-                label: const Text("Upload Banner"),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.black,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
-                ),
-              ),
-              const SizedBox(height: 24),
-
-              ..._controllers.entries.map((entry) {
-                final isDescription = entry.key == 'description';
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 20),
-                  child: TextFormField(
-                    controller: entry.value,
-                    decoration: InputDecoration(
-                      labelText: entry.key[0].toUpperCase() + entry.key.substring(1),
-                      labelStyle: const TextStyle(color: Colors.black),
-                      border: const OutlineInputBorder(),
-                      focusedBorder: const OutlineInputBorder(
-                        borderSide: BorderSide(color: Colors.black),
+                child: Column(
+                  children: [
+                    ClipRRect(
+                      borderRadius: const BorderRadius.vertical(
+                          top: Radius.circular(16)),
+                      child: _pickedImage != null
+                          ? Image.file(_pickedImage!,
+                          height: 180,
+                          width: double.infinity,
+                          fit: BoxFit.cover)
+                          : bannerUrl != null
+                          ? Image.network(bannerUrl!,
+                          height: 180,
+                          width: double.infinity,
+                          fit: BoxFit.cover)
+                          : Container(
+                        height: 180,
+                        color: Colors.grey.shade200,
+                        child: const Center(
+                            child: Text(
+                                "No Banner Uploaded",
+                                style: TextStyle(
+                                    color: Colors.black54))),
                       ),
                     ),
-                    maxLines: isDescription ? 5 : 1,
-                    validator: (value) {
-                      if (value == null || value.trim().isEmpty) {
-                        return 'Please enter ${entry.key}';
-                      }
-                      return null;
-                    },
+                    Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: ElevatedButton.icon(
+                        onPressed: _pickImage,
+                        icon: const Icon(Icons.upload_rounded),
+                        label: const Text("Upload Banner"),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.black,
+                          foregroundColor: Colors.white,
+                          minimumSize: const Size.fromHeight(45),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 20),
+
+              // Info fields card
+              Card(
+                elevation: 2,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    children: [
+                      _buildTextField('website', 'Website'),
+                      const SizedBox(height: 16),
+                      _buildTextField('address', 'Address'),
+                      const SizedBox(height: 16),
+                      _buildTextField('description', 'Description',
+                          maxLines: 4),
+                    ],
                   ),
-                );
-              }),
+                ),
+              ),
 
+              const SizedBox(height: 30),
 
-              const SizedBox(height: 10),
+              // Save button
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
                   onPressed: _isSaving ? null : _saveOrgData,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.black,
+                    foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 16),
+                    textStyle: const TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.bold),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
                   child: _isSaving
-                      ? const CircularProgressIndicator(color: Colors.white)
-                      : const Text("Save Information", style: TextStyle(color: Colors.white)),
+                      ? const SizedBox(
+                    height: 22,
+                    width: 22,
+                    child: CircularProgressIndicator(
+                        color: Colors.white, strokeWidth: 2),
+                  )
+                      : const Text("Save Information"),
                 ),
               ),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildTextField(String key, String label, {int maxLines = 1}) {
+    return TextFormField(
+      controller: _controllers[key],
+      decoration: InputDecoration(
+        labelText: label,
+        filled: true,
+        fillColor: Colors.grey[100],
+        contentPadding:
+        const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.grey.shade300),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.grey.shade300),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Colors.black, width: 1.2),
+        ),
+      ),
+      maxLines: maxLines,
+      validator: (value) {
+        if (value == null || value.trim().isEmpty) {
+          return 'Please enter $label';
+        }
+        return null;
+      },
     );
   }
 }

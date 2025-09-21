@@ -1,7 +1,7 @@
 import 'package:charity/client/donation_details.dart';
+import 'package:charity/client/volunteer.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:charity/client/volunteer.dart';
 
 class ExplorePage extends StatefulWidget {
   final String searchKeyword;
@@ -14,15 +14,24 @@ class ExplorePage extends StatefulWidget {
 
 class _ExplorePageState extends State<ExplorePage> {
   bool _isGridView = false;
+  String _filterType = "All"; // ✅ New filter: All, Donation, Volunteering
   List<Map<String, dynamic>> listings = [];
   DateTime? _selectedDate;
   String _searchQuery = '';
+  late TextEditingController _searchController;
 
   @override
   void initState() {
     super.initState();
     _searchQuery = widget.searchKeyword;
+    _searchController = TextEditingController(text: _searchQuery);
     _fetchAllListings();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _fetchAllListings() async {
@@ -48,7 +57,7 @@ class _ExplorePageState extends State<ExplorePage> {
           'rating': 4.5,
           'reviews': 300,
           'provider': data['organizer']?['name'] ?? '',
-          'image': data['image'] ?? '', // use empty fallback
+          'image': data['image'] ?? '',
           'date': (data['dateAdded'] as Timestamp?)?.toDate() ?? DateTime.now(),
           'raw': data,
         };
@@ -82,46 +91,12 @@ class _ExplorePageState extends State<ExplorePage> {
     });
   }
 
-  void _showFilterSheet() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: DateTime.now(),
-      firstDate: DateTime(2023),
-      lastDate: DateTime(2100),
-    );
-
-    if (picked != null) {
-      setState(() {
-        _selectedDate = picked;
-      });
-    }
-
-    // Optionally show feedback to user
-    if (picked != null && context.mounted) {
-      showModalBottomSheet(
-        context: context,
-        builder: (_) {
-          return Container(
-            padding: const EdgeInsets.all(16),
-            height: 120,
-            child: Center(
-              child: Text(
-                "Filtered by: ${picked.toLocal()}".split(' ')[0],
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              ),
-            ),
-          );
-        },
-      );
-    }
-  }
-
-
   void _goToDetail(Map<String, dynamic> data) {
     if (data['type'] == 'Volunteering') {
       Navigator.push(
         context,
-        MaterialPageRoute(builder: (_) => VolunteeringDetailPage(volunteeringId: data['id'])),
+        MaterialPageRoute(
+            builder: (_) => VolunteeringDetailPage(volunteeringId: data['id'])),
       );
     } else {
       Navigator.push(
@@ -144,70 +119,108 @@ class _ExplorePageState extends State<ExplorePage> {
       final dateMatch = _selectedDate == null ||
           DateUtils.isSameDay(item['date'] as DateTime, _selectedDate);
 
-      return searchMatch && dateMatch;
+      final typeMatch =
+          _filterType == "All" || item['type'] == _filterType;
+
+      return searchMatch && dateMatch && typeMatch;
     }).toList();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Colors.grey.shade50,
       appBar: AppBar(
         backgroundColor: Colors.white,
-        elevation: 0,
-        title: TextField(
-          controller: TextEditingController(text: _searchQuery),
-          decoration: InputDecoration(
-            prefixIcon: const Icon(Icons.search),
-            hintText: "Search by title, description or goal...",
-            filled: true,
-            fillColor: Colors.grey.shade200,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide.none,
-            ),
+        elevation: 1,
+        title: Container(
+          decoration: BoxDecoration(
+            color: Colors.grey.shade200,
+            borderRadius: BorderRadius.circular(12),
           ),
-          onChanged: (value) {
-            setState(() {
-              _searchQuery = value;
-            });
-          },
+          child: TextField(
+            controller: _searchController,
+            decoration: const InputDecoration(
+              hintText: "Search donations or volunteering...",
+              prefixIcon: Icon(Icons.search, color: Colors.black54),
+              border: InputBorder.none,
+              contentPadding: EdgeInsets.symmetric(vertical: 12),
+            ),
+            onChanged: (value) {
+              setState(() {
+                _searchQuery = value;
+              });
+            },
+          ),
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.filter_alt_outlined, color: Colors.black54),
-            onPressed: _showFilterSheet,
-          ),
-          IconButton(
-            icon: Icon(_isGridView ? Icons.list : Icons.grid_on, color: Colors.black54),
+            icon: Icon(
+              _isGridView ? Icons.list : Icons.grid_on,
+              color: Colors.black54,
+            ),
             onPressed: _toggleView,
           ),
         ],
       ),
-      body: listings.isEmpty
-          ? const Center(child: CircularProgressIndicator())
-          : _isGridView
-          ? GridView.builder(
-        padding: const EdgeInsets.all(16),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
-          crossAxisSpacing: 16,
-          mainAxisSpacing: 16,
-          childAspectRatio: 1,
-        ),
-        itemCount: _filteredListings.length,
-        itemBuilder: (context, index) {
-          final item = _filteredListings[index];
-          return _GridViewItem(item: item, goToDetail: _goToDetail);
-        },
-      )
-          : ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: _filteredListings.length,
-        itemBuilder: (context, index) {
-          final item = _filteredListings[index];
-          return _ListViewItem(item: item, goToDetail: _goToDetail);
-        },
+      body: Column(
+        children: [
+          // ✅ Filter Chips for Donation / Volunteering
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Wrap(
+              spacing: 8,
+              children: [
+                ChoiceChip(
+                  label: const Text("All"),
+                  selected: _filterType == "All",
+                  onSelected: (_) => setState(() => _filterType = "All"),
+                ),
+                ChoiceChip(
+                  label: const Text("Donations"),
+                  selected: _filterType == "Donation",
+                  onSelected: (_) => setState(() => _filterType = "Donation"),
+                ),
+                ChoiceChip(
+                  label: const Text("Volunteering"),
+                  selected: _filterType == "Volunteering",
+                  onSelected: (_) => setState(() => _filterType = "Volunteering"),
+                ),
+              ],
+            ),
+          ),
+
+          Expanded(
+            child: listings.isEmpty
+                ? const Center(child: CircularProgressIndicator())
+                : _isGridView
+                ? GridView.builder(
+              padding: const EdgeInsets.all(16),
+              gridDelegate:
+              const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                crossAxisSpacing: 16,
+                mainAxisSpacing: 16,
+                childAspectRatio: 0.85,
+              ),
+              itemCount: _filteredListings.length,
+              itemBuilder: (context, index) {
+                final item = _filteredListings[index];
+                return _GridViewItem(
+                    item: item, goToDetail: _goToDetail);
+              },
+            )
+                : ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: _filteredListings.length,
+              itemBuilder: (context, index) {
+                final item = _filteredListings[index];
+                return _ListViewItem(
+                    item: item, goToDetail: _goToDetail);
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -222,36 +235,58 @@ class _GridViewItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      elevation: 6,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      elevation: 4,
+      clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: () => goToDetail(item),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(item['title'], style: const TextStyle(fontWeight: FontWeight.bold)),
-              const SizedBox(height: 4),
-              Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (item['image'] != null && item['image'] != "")
+              Expanded(
+                child: Image.network(
+                  item['image'],
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                ),
+              ),
+            Padding(
+              padding: const EdgeInsets.all(10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.star, color: Colors.amber, size: 16),
-                  Text('${item['rating']} (${item['reviews']} reviews)'),
+                  Text(item['title'],
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 14)),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Icon(
+                        item['type'] == "Donation"
+                            ? Icons.volunteer_activism
+                            : Icons.handshake,
+                        color: Colors.deepPurple,
+                        size: 16,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(item['type'],
+                          style: const TextStyle(
+                              fontSize: 12, fontWeight: FontWeight.w500)),
+                      const Spacer(),
+                      Text(
+                        item['type'] == 'Donation'
+                            ? '\$${item['price']}'
+                            : 'Free',
+                        style: const TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 12),
+                      ),
+                    ],
+                  )
                 ],
               ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Chip(label: Text(item['type'])),
-                  const Spacer(),
-                  Text(
-                    item['type'] == 'Donation' ? '\$${item['price']}' : 'Free',
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                ],
-              )
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -267,42 +302,71 @@ class _ListViewItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      elevation: 6,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      elevation: 3,
       margin: const EdgeInsets.only(bottom: 16),
       child: InkWell(
         onTap: () => goToDetail(item),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(item['title'], style: const TextStyle(fontWeight: FontWeight.bold)),
-              const SizedBox(height: 4),
-              Row(
-                children: [
-                  const Icon(Icons.star, color: Colors.amber, size: 16),
-                  Text('${item['rating']} (${item['reviews']} reviews)'),
-                  const SizedBox(width: 10),
-                  Text('• ${item['provider']}'),
-                ],
+        child: Row(
+          children: [
+            if (item['image'] != null && item['image'] != "")
+              ClipRRect(
+                borderRadius:
+                const BorderRadius.horizontal(left: Radius.circular(16)),
+                child: Image.network(
+                  item['image'],
+                  height: 100,
+                  width: 100,
+                  fit: BoxFit.cover,
+                ),
               ),
-              const SizedBox(height: 8),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Chip(label: Text(item['type'])),
-                  Text(
-                    item['type'] == 'Donation' ? '\$${item['price']}' : 'Free',
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                ],
-              )
-            ],
-          ),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(item['title'],
+                        style: const TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 15)),
+                    const SizedBox(height: 6),
+                    Text(
+                      item['description'],
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 12, color: Colors.black54),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Icon(
+                          item['type'] == "Donation"
+                              ? Icons.volunteer_activism
+                              : Icons.handshake,
+                          color: Colors.deepPurple,
+                          size: 16,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(item['type'],
+                            style: const TextStyle(
+                                fontSize: 12, fontWeight: FontWeight.w500)),
+                        const Spacer(),
+                        Text(
+                          item['type'] == 'Donation'
+                              ? '\$${item['price']}'
+                              : 'Free',
+                          style: const TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 12),
+                        ),
+                      ],
+                    )
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 }
-

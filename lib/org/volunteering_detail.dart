@@ -49,7 +49,7 @@ class _VolunteeringDetailState extends State<VolunteeringDetail> {
     setState(() {
       attendedCount = attended;
       approvedCount = approved;
-      targetUsers = widget.data['targetusers'] ?? 0;
+      targetUsers = widget.data['targetUsers'] ?? 0;
     });
   }
 
@@ -159,7 +159,6 @@ class _VolunteeringDetailState extends State<VolunteeringDetail> {
               ),
             ),
 
-
             const SizedBox(height: 40),
 
             // Show users attendance button
@@ -196,6 +195,9 @@ class _VolunteeringDetailState extends State<VolunteeringDetail> {
     final dateTimestamp = event['date'] as Timestamp?;
     final date = dateTimestamp != null ? dateTimestamp.toDate() : null;
     final dateStr = date != null ? "${date.day}/${date.month}/${date.year}" : 'N/A';
+
+    final startTime = event['start_time'] ?? 'N/A';
+    final endTime = event['end_time'] ?? 'N/A';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -236,7 +238,18 @@ class _VolunteeringDetailState extends State<VolunteeringDetail> {
             const Icon(Icons.timer, size: 18, color: Colors.black54),
             const SizedBox(width: 6),
             Text(
-              "${event['duration'] ?? 0} hours",
+              "From $startTime to $endTime",
+              style: const TextStyle(color: Colors.black54),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            const Icon(Icons.people, size: 18, color: Colors.black54),
+            const SizedBox(width: 6),
+            Text(
+              "Target: ${event['targetusers'] ?? 0} volunteers",
               style: const TextStyle(color: Colors.black54),
             ),
           ],
@@ -306,7 +319,6 @@ class _VolunteeringDetailState extends State<VolunteeringDetail> {
   }
 
   Widget _buildBarGraph() {
-    final total = attendedCount + approvedCount + targetUsers;
     final maxVal = [attendedCount, approvedCount, targetUsers].reduce((a, b) => a > b ? a : b).toDouble();
 
     double _barHeight(int val) => maxVal == 0 ? 0 : (val / maxVal) * 100;
@@ -357,7 +369,7 @@ class _VolunteeringDetailState extends State<VolunteeringDetail> {
         const SizedBox(height: 6),
         Text(
           label,
-          style: TextStyle(color: Colors.black54),
+          style: const TextStyle(color: Colors.black54),
         ),
       ],
     );

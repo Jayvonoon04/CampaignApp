@@ -21,10 +21,11 @@ class _UpcomingListState extends State<UpcomingList> {
   }
 
   Future<List<Map<String, dynamic>>> _fetchUserVolunteeringEvents() async {
-    final nowIso = DateTime.now().toIso8601String();
+    final now = DateTime.now();
+
     final querySnapshot = await FirebaseFirestore.instance
         .collection('volunteering')
-        .where('date', isGreaterThan: nowIso)
+        .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(now))
         .orderBy('date')
         .get();
 
@@ -42,16 +43,26 @@ class _UpcomingListState extends State<UpcomingList> {
           .get();
 
       if (userDoc.exists) {
-        final eventData = doc.data();
         final userData = userDoc.data()!;
-        userEvents.add({
-          'eventId': eventId,
-          'title': eventData['title'] ?? '',
-          'date': eventData['date'] ?? '',
-          'location': eventData['location'] ?? '',
-          'desc': eventData['desc'] ?? '',
-          'status': userData['status'] ?? 'pending',
-        });
+        final status = userData['status'] ?? 'pending';
+
+        // ✅ Only include if status is approved
+        if (status == 'approved') {
+          final eventData = doc.data();
+          final DateTime eventDate =
+          (eventData['date'] as Timestamp).toDate(); // Convert timestamp
+
+          userEvents.add({
+            'eventId': eventId,
+            'title': eventData['title'] ?? '',
+            'date': eventDate,
+            'location': eventData['location'] ?? '',
+            'desc': eventData['desc'] ?? '',
+            'start_time': eventData['start_time'] ?? '',
+            'end_time': eventData['end_time'] ?? '',
+            'status': status,
+          });
+        }
       }
     }
 
@@ -83,7 +94,7 @@ class _UpcomingListState extends State<UpcomingList> {
                     Icon(Icons.event_busy, color: Colors.grey, size: 40),
                     SizedBox(height: 10),
                     Text(
-                      'You have no upcoming volunteering events.',
+                      'You have no upcoming approved volunteering events.',
                       style: TextStyle(fontSize: 14, color: Colors.grey),
                       textAlign: TextAlign.center,
                     ),
@@ -97,13 +108,14 @@ class _UpcomingListState extends State<UpcomingList> {
         final events = snapshot.data!;
 
         return SizedBox(
-          height: 160,
+          height: 180,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             itemCount: events.length,
             separatorBuilder: (_, __) => const SizedBox(width: 12),
             itemBuilder: (context, index) {
               final event = events[index];
+              final eventDate = event['date'] as DateTime;
 
               return GestureDetector(
                 onTap: () {
@@ -117,7 +129,7 @@ class _UpcomingListState extends State<UpcomingList> {
                   );
                 },
                 child: Container(
-                  width: 220,
+                  width: 230,
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     color: Colors.blue.shade50,
@@ -126,7 +138,8 @@ class _UpcomingListState extends State<UpcomingList> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(Icons.volunteer_activism, color: Colors.deepPurple),
+                      const Icon(Icons.volunteer_activism,
+                          color: Colors.deepPurple),
                       const SizedBox(height: 8),
                       Text(
                         event['title'],
@@ -141,15 +154,23 @@ class _UpcomingListState extends State<UpcomingList> {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${eventDate.day}/${eventDate.month}/${eventDate.year}',
+                        style: const TextStyle(fontSize: 12),
+                      ),
                       const SizedBox(height: 2),
                       Text(
-                        'Date: ${event['date']}',
-                        style: const TextStyle(fontSize: 11),
+                        '${event['start_time']} - ${event['end_time']}',
+                        style: const TextStyle(fontSize: 12),
                       ),
                       const SizedBox(height: 2),
                       Text(
                         'Status: ${event['status']}',
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+                        style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.green),
                       ),
                     ],
                   ),

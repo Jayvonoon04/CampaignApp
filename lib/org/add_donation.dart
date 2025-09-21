@@ -49,6 +49,7 @@ class _AddDonationState extends State<AddDonation> {
       },
       'dateAdded': FieldValue.serverTimestamp(),
       'live': true,
+      'created_by': _user.uid,
     };
 
     try {
