@@ -2,6 +2,7 @@ import 'package:charity/client/payment_success.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 class DonationPaymentPage extends StatefulWidget {
   final String donationTitle;
@@ -75,9 +76,10 @@ class _DonationPaymentPageState extends State<DonationPaymentPage> {
           'cdesc': data?['desc'],
         });
 
-        // Update donation total (store as double)
+        // Update donation total
         final currentRaised = (data?['fundsRaised'] ?? 0).toDouble();
-        final newAmount = currentRaised + double.parse(_amountController.text);
+        final newAmount =
+            currentRaised + double.parse(_amountController.text);
         await doc.update({'fundsRaised': newAmount});
 
         // Save notification
@@ -150,13 +152,21 @@ class _DonationPaymentPageState extends State<DonationPaymentPage> {
               ),
               const SizedBox(height: 20),
 
+              // Card number field
               TextFormField(
                 controller: _cardNumberController,
                 keyboardType: TextInputType.number,
+                inputFormatters: [
+                  LengthLimitingTextInputFormatter(19),
+                  CardNumberInputFormatter(),
+                ],
                 decoration: fieldDecoration("Card Number"),
-                validator: (val) => val == null || val.length < 16
-                    ? "Enter a valid card number"
-                    : null,
+                validator: (val) {
+                  final digitsOnly = val?.replaceAll(' ', '') ?? '';
+                  return digitsOnly.length < 16
+                      ? "Enter a valid card number"
+                      : null;
+                },
               ),
               const SizedBox(height: 16),
 
@@ -165,12 +175,43 @@ class _DonationPaymentPageState extends State<DonationPaymentPage> {
                   Expanded(
                     child: TextFormField(
                       controller: _expiryController,
-                      keyboardType: TextInputType.datetime,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [
+                        LengthLimitingTextInputFormatter(5),
+                        ExpiryDateInputFormatter(),
+                      ],
                       decoration: fieldDecoration("MM/YY"),
-                      validator: (val) => val == null ||
-                          !RegExp(r"^(0[1-9]|1[0-2])\/\d{2}$").hasMatch(val)
-                          ? "Invalid expiry"
-                          : null,
+                      validator: (val) {
+                        if (val == null || val.isEmpty) {
+                          return "Enter expiry date";
+                        }
+
+                        if (!RegExp(r"^(0[1-9]|1[0-2])\/\d{2}$")
+                            .hasMatch(val)) {
+                          return "Invalid expiry format";
+                        }
+
+                        final parts = val.split('/');
+                        final month = int.tryParse(parts[0]) ?? 0;
+                        final year = int.tryParse(parts[1]) ?? 0;
+
+                        final now = DateTime.now();
+                        final currentYear =
+                        int.parse(now.year.toString().substring(2));
+                        final currentMonth = now.month;
+
+                        if (month < 1 || month > 12) {
+                          return "Invalid month";
+                        }
+                        if (year < currentYear) {
+                          return "Card expired";
+                        } else if (year == currentYear &&
+                            month < currentMonth) {
+                          return "Card expired";
+                        }
+
+                        return null;
+                      },
                     ),
                   ),
                   const SizedBox(width: 16),
@@ -181,7 +222,9 @@ class _DonationPaymentPageState extends State<DonationPaymentPage> {
                       obscureText: true,
                       decoration: fieldDecoration("CVV"),
                       validator: (val) =>
-                      val == null || val.length < 3 ? "Invalid CVV" : null,
+                      val == null || val.length < 3
+                          ? "Invalid CVV"
+                          : null,
                     ),
                   ),
                 ],
@@ -233,6 +276,49 @@ class _DonationPaymentPageState extends State<DonationPaymentPage> {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Formatter to insert spaces after every 4 digits
+class CardNumberInputFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+      TextEditingValue oldValue,
+      TextEditingValue newValue,
+      ) {
+    var text = newValue.text.replaceAll(' ', '');
+    var newText = '';
+    for (int i = 0; i < text.length; i++) {
+      newText += text[i];
+      if ((i + 1) % 4 == 0 && i + 1 != text.length) {
+        newText += ' ';
+      }
+    }
+    return TextEditingValue(
+      text: newText,
+      selection: TextSelection.collapsed(offset: newText.length),
+    );
+  }
+}
+
+/// Formatter to insert '/' after MM in expiry date
+class ExpiryDateInputFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+      TextEditingValue oldValue,
+      TextEditingValue newValue,
+      ) {
+    var text = newValue.text;
+    if (text.length == 2 && !text.contains('/')) {
+      text = text + '/';
+    }
+    if (text.length > 5) {
+      text = text.substring(0, 5);
+    }
+    return TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
     );
   }
 }

@@ -9,32 +9,27 @@ import 'package:charity/org/verify.dart';
 import 'package:charity/register.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'firebase_options.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize Firebase in the background without waiting
+  // Initialize Firebase
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   ).then((_) {
-    print("Firebase Initialized");
+    print("✅ Firebase Initialized");
   }).catchError((error) {
-    print("Firebase initialization error: $error");
+    print("❌ Firebase initialization error: $error");
   });
 
-  // Initialize SharedPreferences
-  final prefs = await SharedPreferences.getInstance();
-
-  runApp(MyApp(prefs: prefs));
+  runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
-  final SharedPreferences prefs;
-
-  const MyApp({super.key, required this.prefs});
+  const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -59,9 +54,8 @@ class MyApp extends StatelessWidget {
       home: FutureBuilder(
         future: _determineInitialScreen(),
         builder: (context, snapshot) {
-          // Show a beautiful splash screen while determining auth state
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return SplashScreen();
+            return SplashScreen(); // Show splash while loading
           }
           return snapshot.data ?? const GetStarted();
         },
@@ -74,22 +68,33 @@ class MyApp extends StatelessWidget {
         '/orgHome': (context) => const OrgHome(),
         '/VerifyAccount': (_) => VerifyAccountPage(),
         '/WaitingVerification': (_) => WaitingVerificationPage(),
-        '/forgotPassword':(context) => ForgotPasswordPage(),
+        '/forgotPassword': (context) => ForgotPasswordPage(),
         '/register': (context) => RegisterPage(),
       },
     );
   }
 
+  /// ✅ Logic to determine initial screen
   Future<Widget?> _determineInitialScreen() async {
     try {
-      final firebaseUser = prefs.getString('loggedin');
+      final user = FirebaseAuth.instance.currentUser;
 
-      if (firebaseUser != 'true') {
+      if (user == null) {
+        // Not logged in
         return const GetStarted();
       }
 
-      // Check user role from SharedPreferences
-      final role = prefs.getString('role');
+      // Fetch user role from Firestore
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+
+      if (!userDoc.exists) {
+        return const GetStarted();
+      }
+
+      final role = userDoc.data()?['role'] ?? 'client';
 
       switch (role) {
         case 'admin':
@@ -101,7 +106,7 @@ class MyApp extends StatelessWidget {
           return const Home();
       }
     } catch (e) {
-      print("Error determining initial screen: $e");
+      print("❌ Error determining initial screen: $e");
       return const GetStarted();
     }
   }
@@ -126,7 +131,6 @@ class SplashScreen extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // Animated logo
               Hero(
                 tag: 'app-logo',
                 child: AnimatedContainer(
@@ -153,23 +157,17 @@ class SplashScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 30),
-              // Loading indicator with animation
               const CircularProgressIndicator(
                 valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                 strokeWidth: 5,
               ),
               const SizedBox(height: 20),
-              // Animated text
-              AnimatedOpacity(
-                opacity: 1.0,
-                duration: const Duration(seconds: 1),
-                child: const Text(
-                  'Charity Connect',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                  ),
+              const Text(
+                'Charity Connect',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
             ],

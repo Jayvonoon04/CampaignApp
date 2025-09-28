@@ -49,7 +49,7 @@ class _VolunteeringDetailState extends State<VolunteeringDetail> {
     setState(() {
       attendedCount = attended;
       approvedCount = approved;
-      targetUsers = widget.data['targetUsers'] ?? 0;
+      targetUsers = widget.data['targetusers'] ?? 0;
     });
   }
 

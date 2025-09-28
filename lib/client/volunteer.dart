@@ -34,6 +34,9 @@ class _VolunteeringDetailPageState extends State<VolunteeringDetailPage> {
   String? rejectionReason;
   String? attended;
 
+  /// 🚫 New flag to check if user is banned from this org
+  bool isBannedByOrg = false;
+
   @override
   void initState() {
     super.initState();
@@ -58,18 +61,30 @@ class _VolunteeringDetailPageState extends State<VolunteeringDetailPage> {
       if (orgDoc.exists) {
         orgData = orgDoc.data();
       }
+
+      // ✅ Check if this org has reported current user and admin accepted it
+      final reportSnap = await FirebaseFirestore.instance
+          .collection('reports')
+          .where('orgId', isEqualTo: createdBy)
+          .where('userId', isEqualTo: currentUserId)
+          .where('status', isEqualTo: 'accepted')
+          .get();
+
+      if (reportSnap.docs.isNotEmpty) {
+        isBannedByOrg = true;
+      }
     }
 
-    final userDoc = await FirebaseFirestore.instance
-        .collection("users")
-        .doc(currentUserId)
-        .get();
+    // Get user details
+    final userDoc =
+    await FirebaseFirestore.instance.collection("users").doc(currentUserId).get();
     if (userDoc.exists) {
       final userData = userDoc.data();
       currentUserName = userData?['name'] ?? 'John Doe';
       currentUserPhone = userData?['phone'] ?? '';
     }
 
+    // Get participation status
     final participantDoc = await FirebaseFirestore.instance
         .collection('volunteering')
         .doc(widget.volunteeringId)
@@ -95,9 +110,8 @@ class _VolunteeringDetailPageState extends State<VolunteeringDetailPage> {
   Future<void> submitParticipation() async {
     if (reason.trim().isEmpty) return;
 
-    final docRef = FirebaseFirestore.instance
-        .collection('volunteering')
-        .doc(widget.volunteeringId);
+    final docRef =
+    FirebaseFirestore.instance.collection('volunteering').doc(widget.volunteeringId);
 
     final notificationRef = FirebaseFirestore.instance.collection("notifications");
 
@@ -319,7 +333,9 @@ class _VolunteeringDetailPageState extends State<VolunteeringDetailPage> {
         backgroundColor: Colors.black,
         foregroundColor: Colors.white,
       ),
-      floatingActionButton: (userStatus == null || userStatus == 'rejected')
+      floatingActionButton: (isBannedByOrg)
+          ? null // 🚫 Do not show Participate button
+          : (userStatus == null || userStatus == 'rejected')
           ? FloatingActionButton.extended(
         backgroundColor: Colors.black,
         foregroundColor: Colors.white,
@@ -449,7 +465,17 @@ class _VolunteeringDetailPageState extends State<VolunteeringDetailPage> {
 
             const SizedBox(height: 16),
 
-            if (userStatus == 'approved')
+            if (isBannedByOrg)
+              Card(
+                color: Colors.red.shade50,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                child: const ListTile(
+                  leading: Icon(Icons.block, color: Colors.red),
+                  title: Text("You are banned from this organization's campaigns"),
+                  subtitle: Text("You cannot apply to this volunteering event."),
+                ),
+              )
+            else if (userStatus == 'approved')
               Card(
                 color: Colors.green.shade50,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -469,25 +495,25 @@ class _VolunteeringDetailPageState extends State<VolunteeringDetailPage> {
                 ),
               )
             else if (userStatus == 'rejected')
-              Card(
-                color: Colors.red.shade50,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                child: ListTile(
-                  leading: const Icon(Icons.cancel, color: Colors.red),
-                  title: const Text("Application Rejected"),
-                  subtitle: Text("Reason: $rejectionReason"),
-                ),
-              )
-            else if (userStatus == 'pending')
                 Card(
-                  color: Colors.yellow.shade50,
+                  color: Colors.red.shade50,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  child: const ListTile(
-                    leading: Icon(Icons.hourglass_top, color: Colors.orange),
-                    title: Text("Application Pending"),
-                    subtitle: Text("We are reviewing your application."),
+                  child: ListTile(
+                    leading: const Icon(Icons.cancel, color: Colors.red),
+                    title: const Text("Application Rejected"),
+                    subtitle: Text("Reason: $rejectionReason"),
                   ),
                 )
+              else if (userStatus == 'pending')
+                  Card(
+                    color: Colors.yellow.shade50,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    child: const ListTile(
+                      leading: Icon(Icons.hourglass_top, color: Colors.orange),
+                      title: Text("Application Pending"),
+                      subtitle: Text("We are reviewing your application."),
+                    ),
+                  )
           ],
         ),
       ),

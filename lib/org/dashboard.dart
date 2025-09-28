@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -11,6 +12,7 @@ class OrgDashboardPage extends StatefulWidget {
 
 class _OrgDashboardPageState extends State<OrgDashboardPage> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final String? _userId = FirebaseAuth.instance.currentUser?.uid;
 
   late Future<Map<String, dynamic>> _dashboardData;
 
@@ -21,100 +23,97 @@ class _OrgDashboardPageState extends State<OrgDashboardPage> {
   }
 
   Future<Map<String, dynamic>> _fetchDashboardData() async {
+    if (_userId == null) return {};
+
     int totalCampaigns = 0;
     double totalFundsRaised = 0;
     List<Map<String, dynamic>> topCampaigns = [];
 
-    try {
-      // Try fetching campaigns collection
-      QuerySnapshot campaignsSnapshot = await _firestore.collection('donations').get();
-      totalCampaigns = campaignsSnapshot.docs.length;
+    // --- Step 1: Get campaigns created by this org ---
+    QuerySnapshot campaignsSnapshot = await _firestore
+        .collection('donations')
+        .where('userid', isEqualTo: _userId)
+        .get();
 
-      // Sum total funds raised across campaigns (assuming each campaign doc has 'fundsRaised')
-      for (var doc in campaignsSnapshot.docs) {
-        totalFundsRaised += (doc.data() as Map<String, dynamic>)['fundsRaised']?.toDouble() ?? 0.0;
-      }
+    totalCampaigns = campaignsSnapshot.docs.length;
 
-      // Get top 3 campaigns by fundsRaised
-      topCampaigns = campaignsSnapshot.docs.map((doc) {
-        final data = doc.data() as Map<String, dynamic>;
-        return {
-          'title': data['title'] ?? 'No Title',
-          'raised': (data['fundsRaised'] ?? 0).toDouble(),
-        };
-      }).toList();
-
-      topCampaigns.sort((a, b) => b['raised'].compareTo(a['raised']));
-      if (topCampaigns.length > 3) {
-        topCampaigns = topCampaigns.sublist(0, 3);
-      }
-    } catch (_) {
-      // Fallback: Use donations collection and group by cname (campaign name)
-      QuerySnapshot donationsSnapshot = await _firestore.collection('donations').get();
-
-      // Group donations by campaign name
-      Map<String, double> campaignFunds = {};
-      for (var doc in donationsSnapshot.docs) {
-        final data = doc.data() as Map<String, dynamic>;
-        final cname = data['cname'] ?? 'Unknown Campaign';
-        final amount = (data['amount'] ?? 0).toDouble();
-        campaignFunds[cname] = (campaignFunds[cname] ?? 0) + amount;
-        totalFundsRaised += amount;
-      }
-      totalCampaigns = campaignFunds.keys.length;
-
-      topCampaigns = campaignFunds.entries
-          .map((e) => {'title': e.key, 'raised': e.value})
-          .toList();
-
-      topCampaigns.sort((a, b) => b['raised'].compareTo(a['raised']));
-      if (topCampaigns.length > 3) {
-        topCampaigns = topCampaigns.sublist(0, 3);
-      }
+    List<String> campaignIds = [];
+    for (var doc in campaignsSnapshot.docs) {
+      final data = doc.data() as Map<String, dynamic>;
+      final raised = (data['fundsRaised'] is int)
+          ? (data['fundsRaised'] as int).toDouble()
+          : (data['fundsRaised'] ?? 0.0);
+      totalFundsRaised += raised;
+      campaignIds.add(doc.id);
     }
 
-    // Assuming 'volunteers' collection where each doc has 'live' boolean field
+    topCampaigns = campaignsSnapshot.docs.map((doc) {
+      final data = doc.data() as Map<String, dynamic>;
+      return {
+        'title': data['title'] ?? 'No Title',
+        'raised': (data['fundsRaised'] is int)
+            ? (data['fundsRaised'] as int).toDouble()
+            : (data['fundsRaised'] ?? 0.0),
+      };
+    }).toList();
+
+    topCampaigns.sort((a, b) => b['raised'].compareTo(a['raised']));
+    if (topCampaigns.length > 3) {
+      topCampaigns = topCampaigns.sublist(0, 3);
+    }
+
+    // --- Step 2: Volunteers (volunteering collection) ---
     int totalVolunteers = 0;
     int activeVolunteers = 0;
 
     try {
-      QuerySnapshot volunteersSnapshot = await _firestore.collection('volunteering').get();
+      QuerySnapshot volunteersSnapshot = await _firestore
+          .collection('volunteering')
+          .where('userid', isEqualTo: _userId)
+          .get();
+
       totalVolunteers = volunteersSnapshot.docs.length;
-      activeVolunteers = volunteersSnapshot.docs
-          .where((doc) {
+      activeVolunteers = volunteersSnapshot.docs.where((doc) {
         final data = doc.data() as Map<String, dynamic>;
         return data['live'] == true;
-      })
-          .length;
-    } catch (_) {
-      // fallback: no volunteers collection
-      totalVolunteers = 0;
-      activeVolunteers = 0;
+      }).length;
+    } catch (e) {
+      debugPrint("Error fetching volunteers: $e");
     }
 
-    // Fetch donations for last 6 months for trend graph (simple aggregation)
+    // --- Step 3: Payments trend (last 6 months) ---
     DateTime now = DateTime.now();
     DateTime sixMonthsAgo = DateTime(now.year, now.month - 5, 1);
-    QuerySnapshot recentDonationsSnapshot = await _firestore
-        .collection('payments')
-        .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(sixMonthsAgo))
-        .get();
 
-    // Aggregate donations by month index relative to sixMonthsAgo
-    Map<int, double> monthlyDonations = {};
-    for (var i = 0; i < 6; i++) {
-      monthlyDonations[i] = 0.0;
-    }
+    Map<int, double> monthlyDonations = {for (var i = 0; i < 6; i++) i: 0.0};
 
-    for (var doc in recentDonationsSnapshot.docs) {
-      final data = doc.data() as Map<String, dynamic>;
-      Timestamp ts = data['date'] as Timestamp? ?? Timestamp.now();
-      DateTime donationDate = ts.toDate();
+    if (campaignIds.isNotEmpty) {
+      for (var i = 0; i < campaignIds.length; i += 10) {
+        final batchIds = campaignIds.skip(i).take(10).toList();
 
-      int monthDiff = (donationDate.year - sixMonthsAgo.year) * 12 + donationDate.month - sixMonthsAgo.month;
-      if (monthDiff >= 0 && monthDiff < 6) {
-        final amount = (int.parse(data['amount']) ?? 0).toDouble();
-        monthlyDonations[monthDiff] = (monthlyDonations[monthDiff] ?? 0) + amount;
+        QuerySnapshot paymentsSnapshot = await _firestore
+            .collection('payments')
+            .where('charityid', whereIn: batchIds)
+            .get();
+
+        for (var doc in paymentsSnapshot.docs) {
+          final data = doc.data() as Map<String, dynamic>;
+          final ts = data['date'] as Timestamp?;
+          if (ts == null) continue;
+
+          final date = ts.toDate();
+          if (date.isBefore(sixMonthsAgo)) continue;
+
+          int monthDiff = (date.year - sixMonthsAgo.year) * 12 +
+              date.month -
+              sixMonthsAgo.month;
+
+          if (monthDiff >= 0 && monthDiff < 6) {
+            double amount = double.tryParse(data['amount'].toString()) ?? 0.0;
+            monthlyDonations[monthDiff] =
+                (monthlyDonations[monthDiff] ?? 0) + amount;
+          }
+        }
       }
     }
 
@@ -151,9 +150,8 @@ class _OrgDashboardPageState extends State<OrgDashboardPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Total Campaigns & Funds
                 _buildInfoCard(
-                  title: 'Total Campaigns & Funds Raised',
+                  title: 'Total Donation Campaigns & Funds Raised',
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
@@ -165,7 +163,8 @@ class _OrgDashboardPageState extends State<OrgDashboardPage> {
                       ),
                       _buildMetric(
                         label: 'Funds Raised',
-                        value: 'RM ${(data['totalFundsRaised'] as double).toStringAsFixed(0)}',
+                        value:
+                        'RM ${(data['totalFundsRaised'] as double).toStringAsFixed(0)}',
                         icon: Icons.attach_money,
                         color: Colors.green.shade700,
                       ),
@@ -174,7 +173,6 @@ class _OrgDashboardPageState extends State<OrgDashboardPage> {
                 ),
                 const SizedBox(height: 16),
 
-                // Volunteer Engagement
                 _buildInfoCard(
                   title: 'Volunteer Engagement',
                   child: Column(
@@ -197,8 +195,10 @@ class _OrgDashboardPageState extends State<OrgDashboardPage> {
                       const Text('Engagement Rate'),
                       const SizedBox(height: 6),
                       LinearProgressIndicator(
-                        value: (data['activeVolunteers'] as int) /
-                            ((data['totalVolunteers'] as int) == 0 ? 1 : (data['totalVolunteers'] as int)),
+                        value: (data['totalVolunteers'] == 0)
+                            ? 0
+                            : (data['activeVolunteers'] as int) /
+                            (data['totalVolunteers'] as int),
                         color: Colors.teal,
                         backgroundColor: Colors.teal.shade100,
                         minHeight: 8,
@@ -208,11 +208,11 @@ class _OrgDashboardPageState extends State<OrgDashboardPage> {
                 ),
                 const SizedBox(height: 16),
 
-                // Top Campaigns
                 _buildInfoCard(
                   title: 'Top Performing Campaigns',
                   child: Column(
-                    children: (data['topCampaigns'] as List<dynamic>).map((camp) {
+                    children:
+                    (data['topCampaigns'] as List<dynamic>).map((camp) {
                       return ListTile(
                         contentPadding: EdgeInsets.zero,
                         title: Text(camp['title']),
@@ -227,7 +227,6 @@ class _OrgDashboardPageState extends State<OrgDashboardPage> {
                 ),
                 const SizedBox(height: 16),
 
-                // Donation Trends Graph
                 _buildInfoCard(
                   title: 'Donation Trends (Last 6 Months)',
                   child: SizedBox(
@@ -243,24 +242,43 @@ class _OrgDashboardPageState extends State<OrgDashboardPage> {
                               getTitlesWidget: (value, meta) {
                                 final now = DateTime.now();
                                 final monthIndex = value.toInt();
-                                final displayMonth = DateTime(now.year, now.month - 5 + monthIndex);
-                                const style = TextStyle(color: Colors.black54, fontSize: 10);
-                                final monthLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-                                final label = monthLabels[displayMonth.month - 1];
-                                return Text(label, style: style);
+                                final displayMonth =
+                                DateTime(now.year, now.month - 5 + monthIndex);
+                                const style = TextStyle(
+                                    color: Colors.black54, fontSize: 10);
+                                const monthLabels = [
+                                  'Jan',
+                                  'Feb',
+                                  'Mar',
+                                  'Apr',
+                                  'May',
+                                  'Jun',
+                                  'Jul',
+                                  'Aug',
+                                  'Sep',
+                                  'Oct',
+                                  'Nov',
+                                  'Dec'
+                                ];
+                                return Text(
+                                    monthLabels[displayMonth.month - 1],
+                                    style: style);
                               },
                             ),
                           ),
                           leftTitles: AxisTitles(
-                            sideTitles: SideTitles(showTitles: true, reservedSize: 40),
+                            sideTitles: SideTitles(
+                                showTitles: true, reservedSize: 40),
                           ),
                         ),
                         borderData: FlBorderData(show: true),
                         lineBarsData: [
                           LineChartBarData(
-                            spots: List.generate(6, (index) {
-                              return FlSpot(index.toDouble(), monthlyDonations[index] ?? 0);
-                            }),
+                            spots: List.generate(
+                              6,
+                                  (i) =>
+                                  FlSpot(i.toDouble(), monthlyDonations[i] ?? 0.0),
+                            ),
                             isCurved: true,
                             barWidth: 3,
                             color: Colors.green,
@@ -293,7 +311,9 @@ class _OrgDashboardPageState extends State<OrgDashboardPage> {
           radius: 28,
         ),
         const SizedBox(height: 8),
-        Text(value, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+        Text(value,
+            style:
+            const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
         const SizedBox(height: 4),
         Text(label, style: TextStyle(color: Colors.grey[700])),
       ],
@@ -310,11 +330,11 @@ class _OrgDashboardPageState extends State<OrgDashboardPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              title,
-              style:
-              const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, letterSpacing: 0.5),
-            ),
+            Text(title,
+                style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                    letterSpacing: 0.5)),
             const SizedBox(height: 12),
             child,
           ],

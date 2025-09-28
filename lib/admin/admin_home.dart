@@ -1,6 +1,7 @@
 import 'package:charity/admin/admin_home.dart';
 import 'package:charity/admin/organizations.dart';
 import 'package:charity/admin/requests.dart';
+import 'package:charity/admin/report_page.dart'; // ✅ New import
 import 'package:charity/login.dart'; // ✅ Import your login page
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -19,6 +20,7 @@ class _AdminHomeState extends State<AdminHome> {
   final List<Widget> _adminPages = [
     const AdminRequestsPage(), // Requests page
     const AdminOrgsPage(),     // Organizations page
+    const ReportPage(),        // ✅ New Report Page
   ];
 
   Future<void> _logout() async {
@@ -36,7 +38,11 @@ class _AdminHomeState extends State<AdminHome> {
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          _selectedIndex == 0 ? 'Verification Requests' : 'Organizations',
+          _selectedIndex == 0
+              ? 'Verification Requests'
+              : _selectedIndex == 1
+              ? 'Organizations'
+              : 'Reports',
           style: const TextStyle(
             fontWeight: FontWeight.bold,
           ),
@@ -59,15 +65,6 @@ class _AdminHomeState extends State<AdminHome> {
         children: _adminPages,
       ),
       bottomNavigationBar: _buildAdminBottomNav(),
-      floatingActionButton: _selectedIndex == 0
-          ? FloatingActionButton(
-        onPressed: () {
-          // Handle new request action
-        },
-        backgroundColor: Colors.orange,
-        child: const Icon(Icons.add_alert, color: Colors.white),
-      )
-          : null,
     );
   }
 
@@ -99,6 +96,11 @@ class _AdminHomeState extends State<AdminHome> {
             icon: Icon(Icons.people_outlined),
             activeIcon: Icon(Icons.people),
             label: 'Organizations',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.report_outlined),
+            activeIcon: Icon(Icons.report),
+            label: 'Reports',
           ),
         ],
       ),

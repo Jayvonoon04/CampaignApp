@@ -51,6 +51,7 @@ class _DonationsPageState extends State<DonationsPage> {
   String? selectedYear;
   String? selectedCampaign;
   DateTimeRange? selectedDateRange;
+  bool sortNewestFirst = true; // 🔥 sort toggle
 
   @override
   void initState() {
@@ -84,14 +85,14 @@ class _DonationsPageState extends State<DonationsPage> {
           'date': (data['date'] as Timestamp).toDate(),
           'note': data['cdesc'] ?? '',
           'cname': data['cname'] ?? '',
-          'charityId': data['charityid'] ?? '', // 🔥 lowercase fix
+          'charityId': data['charityid'] ?? '',
           'donationId': doc.id,
         };
       }).toList();
 
       setState(() {
         allDonations = donations;
-        filteredDonations = donations;
+        applyFilters(); // apply sorting + filters
       });
     } catch (e) {
       debugPrint('Error fetching donations: $e');
@@ -257,6 +258,11 @@ class _DonationsPageState extends State<DonationsPage> {
           .toList();
     }
 
+    // 🔥 Apply sorting
+    filtered.sort((a, b) => sortNewestFirst
+        ? b['date'].compareTo(a['date'])
+        : a['date'].compareTo(b['date']));
+
     setState(() {
       filteredDonations = filtered;
     });
@@ -379,8 +385,7 @@ class _DonationsPageState extends State<DonationsPage> {
                                           amount: double.parse(
                                               donation['amount']
                                                   .toString()),
-                                          charityName:
-                                          donation['cname'],
+                                          charityName: donation['cname'],
                                           date: donation['date'],
                                           receiptId:
                                           donation['donationId'],
@@ -398,8 +403,8 @@ class _DonationsPageState extends State<DonationsPage> {
                                       },
                                       child: const Text(
                                         "View Receipt",
-                                        style: TextStyle(
-                                            color: Colors.white),
+                                        style:
+                                        TextStyle(color: Colors.white),
                                       ),
                                     ),
                                   ),
@@ -442,8 +447,7 @@ class _DonationsPageState extends State<DonationsPage> {
                               DateFormat('yyyy-MM-dd')
                                   .format(donation['date']),
                               style: GoogleFonts.inter(
-                                  fontSize: 12,
-                                  color: Colors.grey[500])),
+                                  fontSize: 12, color: Colors.grey[500])),
                         ],
                       ),
                     ),
@@ -461,7 +465,7 @@ class _DonationsPageState extends State<DonationsPage> {
     );
   }
 
-  /// Filter widget
+  /// Filter + Sort widget
   Widget _buildFilters() {
     final years = allDonations
         .map((d) => DateFormat('yyyy').format(d['date']))
@@ -493,8 +497,8 @@ class _DonationsPageState extends State<DonationsPage> {
             style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.grey[200],
                 foregroundColor: Colors.black,
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 12, vertical: 10),
+                padding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10))),
             onPressed: () async {
@@ -532,6 +536,39 @@ class _DonationsPageState extends State<DonationsPage> {
                 applyFilters();
               },
             ),
+          ),
+          // 🔥 Sort buttons
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor:
+                  sortNewestFirst ? Colors.black : Colors.grey[300],
+                  foregroundColor:
+                  sortNewestFirst ? Colors.white : Colors.black,
+                ),
+                onPressed: () {
+                  setState(() => sortNewestFirst = true);
+                  applyFilters();
+                },
+                child: const Text("Newest"),
+              ),
+              const SizedBox(width: 8),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor:
+                  !sortNewestFirst ? Colors.black : Colors.grey[300],
+                  foregroundColor:
+                  !sortNewestFirst ? Colors.white : Colors.black,
+                ),
+                onPressed: () {
+                  setState(() => sortNewestFirst = false);
+                  applyFilters();
+                },
+                child: const Text("Oldest"),
+              ),
+            ],
           ),
         ],
       ),

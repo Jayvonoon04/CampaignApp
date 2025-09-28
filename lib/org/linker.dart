@@ -6,6 +6,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:charity/org/contact_us.dart';
 import 'package:charity/org/org_info.dart';
+import 'package:charity/org/report_page.dart';
 
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});
@@ -66,6 +67,14 @@ class SettingsPage extends StatelessWidget {
             onTap: () => _navigateTo(context, const ContactUsPage()),
           ),
 
+          _buildTile(
+            context,
+            title: 'Report User',
+            subtitle: 'Report a volunteer for misconduct',
+            icon: Icons.report_gmailerrorred_outlined,
+            onTap: () => _navigateTo(context, const ReportPage()),
+          ),
+
           const SizedBox(height: 30),
 
           // Account Section
@@ -85,13 +94,13 @@ class SettingsPage extends StatelessWidget {
             icon: Icons.person_outline_rounded,
             onTap: () => _navigateTo(context, const OrgSettingsPage()),
           ),
-          _buildTile(
+          /*_buildTile(
             context,
             title: 'Edit Organization Info',
             subtitle: 'Manage organization details',
             icon: Icons.apartment_outlined,
             onTap: () => _navigateTo(context, const OrgInfoPage()),
-          ),
+          ),*/
 
           const SizedBox(height: 30),
 

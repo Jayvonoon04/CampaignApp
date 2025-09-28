@@ -13,7 +13,7 @@ void main() {
     final prefs = await SharedPreferences.getInstance();
 
     // Build our app and trigger a frame with prefs
-    await tester.pumpWidget(MyApp(prefs: prefs));
+    await tester.pumpWidget(const MyApp());
 
     // Since your real app doesn’t have a counter anymore,
     // you may want to test for something else.

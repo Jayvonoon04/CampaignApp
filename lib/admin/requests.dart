@@ -34,13 +34,18 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
       if (role == 'org' && verified != 'true') {
         final reqSnapshot =
         await _firestore.collection('requests').doc(uid).get();
-        if (reqSnapshot.exists &&
-            !(reqSnapshot.data()?['approved'] == true)) {
-          requests.add({
-            'userId': uid,
-            'userData': data,
-            'requestData': reqSnapshot.data(),
-          });
+        if (reqSnapshot.exists) {
+          final reqData = reqSnapshot.data();
+          final approved = reqData?['approved'];
+
+          // ✅ Only show pending requests
+          if (approved == null) {
+            requests.add({
+              'userId': uid,
+              'userData': data,
+              'requestData': reqData,
+            });
+          }
         }
       }
     }
