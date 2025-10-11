@@ -71,7 +71,26 @@ class _VolunteeringDetailPageState extends State<VolunteeringDetailPage> {
           .get();
 
       if (reportSnap.docs.isNotEmpty) {
-        isBannedByOrg = true;
+        // 🚫 Only consider as banned if NOT already approved or attended
+        final participantDoc = await FirebaseFirestore.instance
+            .collection('volunteering')
+            .doc(widget.volunteeringId)
+            .collection('users')
+            .doc(currentUserId)
+            .get();
+
+        if (participantDoc.exists) {
+          final participantData = participantDoc.data()!;
+          final bool hasAttended = participantData['attended'].toString() == 'true';
+          final String status = participantData['status'] ?? '';
+
+          // ✅ If already approved or attended, do NOT ban from viewing certificate
+          if (!(hasAttended || status == 'approved')) {
+            isBannedByOrg = true;
+          }
+        } else {
+          isBannedByOrg = true;
+        }
       }
     }
 

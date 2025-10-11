@@ -45,10 +45,11 @@ class _PrevVolunteeringPageState extends State<PrevVolunteeringPage> {
         final Timestamp timestamp = eventData['date'];
         final eventDate = timestamp.toDate();
 
-        // Only include past events
+        // ✅ Only include past events
         if (eventDate.isBefore(now)) {
           final userData = userDoc.data()!;
-          // ✅ Always cast duration into double
+
+          // ✅ Handle duration safely
           final double duration =
           (eventData['duration'] is int)
               ? (eventData['duration'] as int).toDouble()
@@ -56,6 +57,7 @@ class _PrevVolunteeringPageState extends State<PrevVolunteeringPage> {
               ? eventData['duration'] as double
               : double.tryParse(eventData['duration'].toString()) ?? 0.0;
 
+          // ✅ Mark total hours only if attended
           if (userData['attended'].toString() == 'true') {
             totalHours += duration;
           }
@@ -66,17 +68,25 @@ class _PrevVolunteeringPageState extends State<PrevVolunteeringPage> {
               ? DateTime.tryParse(eventData['date']) ?? DateTime.now()
               : DateTime.now();
 
-          userEvents.add({
-            'eventId': eventId,
-            'title': eventData['title'] ?? '',
-            'date': parsedDate,
-            'location': eventData['location'] ?? '',
-            'desc': eventData['desc'] ?? '',
-            'duration': duration,
-            'start_time': eventData['start_time'] ?? '', // ✅ added
-            'end_time': eventData['end_time'] ?? '',     // ✅ added
-            'status': userData['status'] ?? 'pending',
-          });
+          // ✅ Ensure attended events are included even if user is now banned
+          final status = userData['status'] ?? 'pending';
+          final attended = userData['attended'].toString() == 'true';
+
+          // Only include if attended or previously approved
+          if (attended || status == 'approved' || status == 'banned') {
+            userEvents.add({
+              'eventId': eventId,
+              'title': eventData['title'] ?? '',
+              'date': parsedDate,
+              'location': eventData['location'] ?? '',
+              'desc': eventData['desc'] ?? '',
+              'duration': duration,
+              'start_time': eventData['start_time'] ?? '',
+              'end_time': eventData['end_time'] ?? '',
+              'status': status,
+              'attended': attended,
+            });
+          }
         }
       }
     }
@@ -166,18 +176,24 @@ class _PrevVolunteeringPageState extends State<PrevVolunteeringPage> {
               const SizedBox(height: 16),
               ...List.generate(actualEvents.length, (index) {
                 final event = actualEvents[index];
+                final attended = event['attended'] == true;
+                final status = event['status'];
+
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 12),
                   child: GestureDetector(
                     onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => VolunteeringDetailPage(
-                            volunteeringId: event['eventId'],
+                      // ✅ Allow navigation to certificate even if banned
+                      if (attended || status == 'approved' || status == 'banned') {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => VolunteeringDetailPage(
+                              volunteeringId: event['eventId'],
+                            ),
                           ),
-                        ),
-                      );
+                        );
+                      }
                     },
                     child: Card(
                       shape: RoundedRectangleBorder(
@@ -220,16 +236,37 @@ class _PrevVolunteeringPageState extends State<PrevVolunteeringPage> {
                               style: const TextStyle(fontSize: 12),
                             ),
                             const SizedBox(height: 4),
-                            Text(
-                              'Status: ${event['status']}',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w500,
-                                color: event['status'] == 'attended'
-                                    ? Colors.green
-                                    : Colors.orange,
-                              ),
+                            Row(
+                              children: [
+                                Text(
+                                  'Status: ${status}',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w500,
+                                    color: attended
+                                        ? Colors.green
+                                        : (status == 'banned'
+                                        ? Colors.red
+                                        : Colors.orange),
+                                  ),
+                                ),
+                                if (attended)
+                                  const Padding(
+                                    padding: EdgeInsets.only(left: 8.0),
+                                    child: Icon(Icons.verified,
+                                        size: 16, color: Colors.green),
+                                  ),
+                              ],
                             ),
+                            if (attended)
+                              const Padding(
+                                padding: EdgeInsets.only(top: 4),
+                                child: Text(
+                                  'Certificate available',
+                                  style: TextStyle(
+                                      fontSize: 12, color: Colors.green),
+                                ),
+                              ),
                           ],
                         ),
                       ),

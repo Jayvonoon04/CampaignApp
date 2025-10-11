@@ -179,7 +179,7 @@ class _OrgDashboardPageState extends State<OrgDashboardPage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       _buildMetric(
-                        label: 'Total Volunteers',
+                        label: 'Total Events',
                         value: data['totalVolunteers'].toString(),
                         icon: Icons.people,
                         color: Colors.blue.shade700,

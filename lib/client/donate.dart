@@ -48,13 +48,10 @@ class _DonationPaymentPageState extends State<DonationPaymentPage> {
 
   Future<void> saveData() async {
     try {
-      final doc =
-      FirebaseFirestore.instance.collection("donations").doc(widget.id);
-
+      final doc = FirebaseFirestore.instance.collection("donations").doc(widget.id);
       final payRef = FirebaseFirestore.instance
           .collection("payments")
           .doc(DateTime.now().microsecondsSinceEpoch.toString());
-
       final notificationRef = FirebaseFirestore.instance
           .collection("notifications")
           .doc(DateTime.now().microsecondsSinceEpoch.toString());
@@ -64,7 +61,6 @@ class _DonationPaymentPageState extends State<DonationPaymentPage> {
       if (document.exists) {
         final data = document.data();
 
-        // Save payment record
         await payRef.set({
           'userid': FirebaseAuth.instance.currentUser?.uid,
           'email': FirebaseAuth.instance.currentUser?.email,
@@ -76,23 +72,19 @@ class _DonationPaymentPageState extends State<DonationPaymentPage> {
           'cdesc': data?['desc'],
         });
 
-        // Update donation total
         final currentRaised = (data?['fundsRaised'] ?? 0).toDouble();
-        final newAmount =
-            currentRaised + double.parse(_amountController.text);
+        final newAmount = currentRaised + double.parse(_amountController.text);
         await doc.update({'fundsRaised': newAmount});
 
-        // Save notification
         await notificationRef.set({
           'userid': FirebaseAuth.instance.currentUser?.uid,
           'iconName': 'donation',
           'title': 'Donation made to ${data?['title']}',
           'message':
-          'Your donation has been received. Thanks a lot, this donation will count toward making life better and wholesome',
+          'Your donation has been received. Thanks a lot — this donation will help make lives better!',
           'date': FieldValue.serverTimestamp(),
         });
 
-        // Navigate to success page
         if (mounted) {
           Navigator.of(context).pushAndRemoveUntil(
             MaterialPageRoute(builder: (context) => const PaymentSuccess()),
@@ -110,28 +102,35 @@ class _DonationPaymentPageState extends State<DonationPaymentPage> {
 
   void submit() async {
     if (!_formKey.currentState!.validate()) return;
-
     setState(() => _isLoading = true);
     await saveData();
     if (mounted) setState(() => _isLoading = false);
   }
 
-  InputDecoration fieldDecoration(String label) {
+  InputDecoration fieldDecoration(String label, {IconData? icon}) {
     return InputDecoration(
+      prefixIcon: icon != null
+          ? Icon(icon, color: Colors.grey[700], size: 22)
+          : null,
       labelText: label,
-      labelStyle: const TextStyle(color: Colors.black87),
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-      focusedBorder: OutlineInputBorder(
-        borderSide: const BorderSide(color: Colors.black),
-        borderRadius: BorderRadius.circular(10),
+      labelStyle: const TextStyle(color: Colors.black87, fontSize: 15),
+      filled: true,
+      fillColor: Colors.white,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide.none,
       ),
-      contentPadding:
-      const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+      focusedBorder: OutlineInputBorder(
+        borderSide: const BorderSide(color: Colors.black, width: 1.2),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final accent = Colors.black;
     return Scaffold(
       backgroundColor: Colors.grey[100],
       appBar: AppBar(
@@ -142,138 +141,181 @@ class _DonationPaymentPageState extends State<DonationPaymentPage> {
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            children: [
-              const Text(
-                "Donate using Card",
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+        child: Column(
+          children: [
+            const SizedBox(height: 10),
+            Text(
+              "Donate using Card",
+              style: const TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
               ),
-              const SizedBox(height: 20),
+            ),
+            const SizedBox(height: 24),
 
-              // Card number field
-              TextFormField(
-                controller: _cardNumberController,
-                keyboardType: TextInputType.number,
-                inputFormatters: [
-                  LengthLimitingTextInputFormatter(19),
-                  CardNumberInputFormatter(),
+            // --- Card Container ---
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(18),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.grey.withOpacity(0.15),
+                    blurRadius: 10,
+                    offset: const Offset(0, 5),
+                  ),
                 ],
-                decoration: fieldDecoration("Card Number"),
-                validator: (val) {
-                  final digitsOnly = val?.replaceAll(' ', '') ?? '';
-                  return digitsOnly.length < 16
-                      ? "Enter a valid card number"
-                      : null;
-                },
               ),
-              const SizedBox(height: 16),
-
-              Row(
-                children: [
-                  Expanded(
-                    child: TextFormField(
-                      controller: _expiryController,
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  children: [
+                    TextFormField(
+                      controller: _cardNumberController,
                       keyboardType: TextInputType.number,
                       inputFormatters: [
-                        LengthLimitingTextInputFormatter(5),
-                        ExpiryDateInputFormatter(),
+                        LengthLimitingTextInputFormatter(19),
+                        CardNumberInputFormatter(),
                       ],
-                      decoration: fieldDecoration("MM/YY"),
+                      decoration: fieldDecoration("Card Number",
+                          icon: Icons.credit_card),
                       validator: (val) {
-                        if (val == null || val.isEmpty) {
-                          return "Enter expiry date";
-                        }
-
-                        if (!RegExp(r"^(0[1-9]|1[0-2])\/\d{2}$")
-                            .hasMatch(val)) {
-                          return "Invalid expiry format";
-                        }
-
-                        final parts = val.split('/');
-                        final month = int.tryParse(parts[0]) ?? 0;
-                        final year = int.tryParse(parts[1]) ?? 0;
-
-                        final now = DateTime.now();
-                        final currentYear =
-                        int.parse(now.year.toString().substring(2));
-                        final currentMonth = now.month;
-
-                        if (month < 1 || month > 12) {
-                          return "Invalid month";
-                        }
-                        if (year < currentYear) {
-                          return "Card expired";
-                        } else if (year == currentYear &&
-                            month < currentMonth) {
-                          return "Card expired";
-                        }
-
-                        return null;
+                        final digitsOnly = val?.replaceAll(' ', '') ?? '';
+                        return digitsOnly.length < 16
+                            ? "Enter a valid card number"
+                            : null;
                       },
                     ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: TextFormField(
-                      controller: _cvvController,
-                      keyboardType: TextInputType.number,
-                      obscureText: true,
-                      decoration: fieldDecoration("CVV"),
-                      validator: (val) =>
-                      val == null || val.length < 3
-                          ? "Invalid CVV"
+                    const SizedBox(height: 16),
+
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextFormField(
+                            controller: _expiryController,
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [
+                              LengthLimitingTextInputFormatter(5),
+                              ExpiryDateInputFormatter(),
+                            ],
+                            decoration:
+                            fieldDecoration("MM/YY", icon: Icons.calendar_today),
+                            validator: (val) {
+                              if (val == null || val.isEmpty) {
+                                return "Enter expiry date";
+                              }
+                              if (!RegExp(r"^(0[1-9]|1[0-2])\/\d{2}$")
+                                  .hasMatch(val)) {
+                                return "Invalid expiry";
+                              }
+                              final parts = val.split('/');
+                              final month = int.tryParse(parts[0]) ?? 0;
+                              final year = int.tryParse(parts[1]) ?? 0;
+                              final now = DateTime.now();
+                              final currentYear =
+                              int.parse(now.year.toString().substring(2));
+                              final currentMonth = now.month;
+                              if (year < currentYear ||
+                                  (year == currentYear && month < currentMonth)) {
+                                return "Card expired";
+                              }
+                              return null;
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: TextFormField(
+                            controller: _cvvController,
+                            keyboardType: TextInputType.number,
+                            obscureText: true,
+                            decoration: fieldDecoration("CVV", icon: Icons.lock),
+                            validator: (val) =>
+                            val == null || val.length < 3
+                                ? "Invalid CVV"
+                                : null,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+
+                    TextFormField(
+                      controller: _nameController,
+                      decoration:
+                      fieldDecoration("Name on Card", icon: Icons.person),
+                      validator: (val) => val == null || val.trim().isEmpty
+                          ? "Enter cardholder name"
                           : null,
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
+                    const SizedBox(height: 24),
 
-              TextFormField(
-                controller: _nameController,
-                decoration: fieldDecoration("Name on Card"),
-                validator: (val) => val == null || val.trim().isEmpty
-                    ? "Enter cardholder name"
-                    : null,
-              ),
-
-              const SizedBox(height: 24),
-
-              TextFormField(
-                controller: _amountController,
-                readOnly: true,
-                keyboardType: TextInputType.number,
-                decoration: fieldDecoration("Amount in RM"),
-              ),
-
-              const SizedBox(height: 24),
-
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: _isLoading ? null : submit,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.black,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                    // Amount box
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[50],
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: Colors.grey.shade300),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            "Donation Amount",
+                            style: TextStyle(fontSize: 16),
+                          ),
+                          Text(
+                            "RM ${_amountController.text}",
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  child: _isLoading
-                      ? const SizedBox(
-                    height: 20,
-                    width: 20,
-                    child: CircularProgressIndicator(
-                        color: Colors.white, strokeWidth: 2),
-                  )
-                      : const Text("Donate"),
+                    const SizedBox(height: 28),
+
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: _isLoading ? null : submit,
+                        icon: const Icon(Icons.favorite, color: Colors.white),
+                        label: _isLoading
+                            ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(
+                              color: Colors.white, strokeWidth: 2),
+                        )
+                            : const Text(
+                          "Donate Now",
+                          style: TextStyle(fontSize: 16),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: accent,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ],
-          ),
+            ),
+
+            const SizedBox(height: 30),
+            Text(
+              "Your contribution makes a real difference 💖",
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey[700], fontSize: 14),
+            ),
+          ],
         ),
       ),
     );
@@ -291,9 +333,7 @@ class CardNumberInputFormatter extends TextInputFormatter {
     var newText = '';
     for (int i = 0; i < text.length; i++) {
       newText += text[i];
-      if ((i + 1) % 4 == 0 && i + 1 != text.length) {
-        newText += ' ';
-      }
+      if ((i + 1) % 4 == 0 && i + 1 != text.length) newText += ' ';
     }
     return TextEditingValue(
       text: newText,
@@ -311,7 +351,7 @@ class ExpiryDateInputFormatter extends TextInputFormatter {
       ) {
     var text = newValue.text;
     if (text.length == 2 && !text.contains('/')) {
-      text = text + '/';
+      text = '$text/';
     }
     if (text.length > 5) {
       text = text.substring(0, 5);
