@@ -1,4 +1,3 @@
-import 'package:charity/client/main_tab.dart';
 import 'package:charity/client/search_view.dart';
 import 'package:charity/client/stats_carousel.dart';
 import 'package:charity/client/upcoming.dart';

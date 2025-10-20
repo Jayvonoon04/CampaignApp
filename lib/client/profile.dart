@@ -34,7 +34,6 @@ class _ProfilePageState  extends State<ProfilePage> {
     _getData();
   }
 
-
   final TextEditingController _nameController = TextEditingController(text: '');
   final TextEditingController _emailController = TextEditingController(text: '');
   final TextEditingController _phoneController = TextEditingController(text: '');

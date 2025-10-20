@@ -36,7 +36,7 @@ class _RegisterPageState extends State<RegisterPage> {
         'role': role,
         'name': nameController.text.trim(),
         'email': emailController.text.trim(),
-        'password': passwordController.text.trim(), // ❌ demo only
+        'password': passwordController.text.trim(),
       };
 
       if (role == 'client') {

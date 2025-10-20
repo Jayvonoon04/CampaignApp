@@ -37,7 +37,7 @@ class _DonationDetailState extends State<DonationDetail> {
 
     for (var doc in snapshot.docs) {
       final data = doc.data();
-      final amount = (data['amount'] as num).toDouble(); // ✅ Correct parsing
+      final amount = (data['amount'] as num).toDouble(); // Correct parsing
       final date =
       DateFormat('MMM d').format((data['date'] as Timestamp).toDate());
 
@@ -45,7 +45,7 @@ class _DonationDetailState extends State<DonationDetail> {
       tempPayments.add(data);
     }
 
-    // ✅ Sort donors by date (newest → oldest)
+    // Sort donors by date (newest → oldest)
     tempPayments.sort((a, b) =>
         (b['date'] as Timestamp).compareTo((a['date'] as Timestamp)));
 

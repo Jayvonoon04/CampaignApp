@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:math';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -127,10 +128,10 @@ class _VolunteeringDetailPageState extends State<VolunteeringDetailPage> {
   }
 
   Future<void> submitParticipation() async {
-    if (reason.trim().isEmpty) return;
-
-    final docRef =
-    FirebaseFirestore.instance.collection('volunteering').doc(widget.volunteeringId);
+    // ✅ Remove the manual empty reason check — handled by validator now
+    final docRef = FirebaseFirestore.instance
+        .collection('volunteering')
+        .doc(widget.volunteeringId);
 
     final notificationRef = FirebaseFirestore.instance.collection("notifications");
 
@@ -163,7 +164,6 @@ class _VolunteeringDetailPageState extends State<VolunteeringDetailPage> {
     }
 
     if (mounted) {
-      Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Application submitted successfully")),
       );
@@ -174,6 +174,9 @@ class _VolunteeringDetailPageState extends State<VolunteeringDetailPage> {
   }
 
   void showBottomSheet() {
+    final TextEditingController reasonController = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -183,39 +186,54 @@ class _VolunteeringDetailPageState extends State<VolunteeringDetailPage> {
       builder: (context) {
         return Padding(
           padding: MediaQuery.of(context).viewInsets.add(const EdgeInsets.all(20)),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                "Tell us why you're a great fit",
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                minLines: 3,
-                maxLines: 6,
-                onChanged: (val) => reason = val,
-                decoration: InputDecoration(
-                  hintText: "Write your reason...",
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
+          child: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  "Tell us why you're a great fit",
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: reasonController,
+                  minLines: 3,
+                  maxLines: 6,
+                  validator: (val) {
+                    if (val == null || val.trim().isEmpty) {
+                      return "Please enter your reason before submitting.";
+                    }
+                    return null;
+                  },
+                  decoration: InputDecoration(
+                    hintText: "Write your reason...",
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 12),
-              ElevatedButton(
-                onPressed: submitParticipation,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.black,
-                  foregroundColor: Colors.white,
-                  minimumSize: const Size.fromHeight(45),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
+                const SizedBox(height: 12),
+                ElevatedButton(
+                  onPressed: () {
+                    if (formKey.currentState!.validate()) {
+                      reason = reasonController.text.trim();
+                      submitParticipation();
+                      Navigator.pop(context); // close sheet after successful submission
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.black,
+                    foregroundColor: Colors.white,
+                    minimumSize: const Size.fromHeight(45),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
+                  child: const Text("Submit"),
                 ),
-                child: const Text("Submit"),
-              ),
-            ],
+              ],
+            ),
           ),
         );
       },
@@ -241,60 +259,165 @@ class _VolunteeringDetailPageState extends State<VolunteeringDetailPage> {
         pw.Page(
           pageFormat: PdfPageFormat.a4,
           build: (pw.Context context) {
-            return pw.Center(
-              child: pw.Container(
-                padding: const pw.EdgeInsets.all(32),
-                decoration: pw.BoxDecoration(
-                  border: pw.Border.all(width: 4, color: PdfColors.black),
-                ),
-                child: pw.Column(
-                  mainAxisSize: pw.MainAxisSize.min,
-                  crossAxisAlignment: pw.CrossAxisAlignment.center,
-                  children: [
-                    pw.Text('Certificate of Participation',
-                        style: pw.TextStyle(
-                            fontSize: 28,
-                            fontWeight: pw.FontWeight.bold,
-                            color: PdfColors.deepOrange)),
-                    pw.SizedBox(height: 20),
-                    pw.Text('This is to certify that',
-                        style: pw.TextStyle(fontSize: 16)),
-                    pw.SizedBox(height: 10),
-                    pw.Text(userName,
-                        style: pw.TextStyle(
-                            fontSize: 24,
-                            fontWeight: pw.FontWeight.bold,
-                            color: PdfColors.blue)),
-                    pw.SizedBox(height: 10),
-                    pw.Text('has successfully participated in the event:',
-                        style: pw.TextStyle(fontSize: 16)),
-                    pw.SizedBox(height: 10),
-                    pw.Text(eventName,
-                        style: pw.TextStyle(
-                            fontSize: 20,
-                            fontWeight: pw.FontWeight.bold,
-                            color: PdfColors.green)),
-                    pw.SizedBox(height: 10),
+            return pw.Container(
+              decoration: pw.BoxDecoration(
+                border: pw.Border.all(width: 4, color: PdfColors.black),
+                color: PdfColors.white,
+              ),
+              padding: const pw.EdgeInsets.all(32),
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.center,
+                mainAxisAlignment: pw.MainAxisAlignment.center,
+                children: [
+                  // 🏛️ Top Title
+                  pw.Text(
+                    'CERTIFICATE OF PARTICIPATION',
+                    style: pw.TextStyle(
+                      fontSize: 28,
+                      fontWeight: pw.FontWeight.bold,
+                      color: PdfColor.fromInt(0xFF2C3E50),
+                      letterSpacing: 1.5,
+                    ),
+                    textAlign: pw.TextAlign.center,
+                  ),
+                  pw.SizedBox(height: 12),
+                  pw.Container(
+                    width: 200,
+                    height: 3,
+                    color: PdfColor.fromInt(0xFF2C3E50),
+                  ),
+                  pw.SizedBox(height: 24),
+
+                  // 📜 Intro Text
+                  pw.Text(
+                    'This is proudly presented to',
+                    style: const pw.TextStyle(
+                      fontSize: 16,
+                      color: PdfColors.grey700,
+                    ),
+                  ),
+                  pw.SizedBox(height: 12),
+
+                  // 👤 Participant Name
+                  pw.Text(
+                    userName,
+                    style: pw.TextStyle(
+                      fontSize: 26,
+                      fontWeight: pw.FontWeight.bold,
+                      color: PdfColor.fromInt(0xFF1B4F72),
+                    ),
+                  ),
+                  pw.SizedBox(height: 12),
+
+                  // 🏆 Description
+                  pw.Text(
+                    'For actively participating in the volunteering event:',
+                    style: const pw.TextStyle(fontSize: 14),
+                    textAlign: pw.TextAlign.center,
+                  ),
+                  pw.SizedBox(height: 8),
+
+                  // 📅 Event Name
+                  pw.Text(
+                    '"$eventName"',
+                    style: pw.TextStyle(
+                      fontSize: 18,
+                      fontWeight: pw.FontWeight.bold,
+                      color: PdfColor.fromInt(0xFF16A085),
+                    ),
+                    textAlign: pw.TextAlign.center,
+                  ),
+                  pw.SizedBox(height: 10),
+                  pw.Text(
+                    'held on ${DateFormat('MMMM dd, yyyy').format(eventDate)}',
+                    style: const pw.TextStyle(fontSize: 13),
+                  ),
+                  pw.SizedBox(height: 6),
+                  pw.Text(
+                    'at $eventLocation',
+                    style: const pw.TextStyle(fontSize: 13),
+                  ),
+                  if (eventDuration != 0)
+                    pw.SizedBox(height: 6),
+                  if (eventDuration != 0)
                     pw.Text(
-                        'Held on ${eventDate.toLocal().toString().split(' ')[0]} at $eventLocation'),
-                    pw.SizedBox(height: 10),
-                    if (eventDuration != 0) pw.Text('Duration: $eventDuration Hrs'),
-                    pw.SizedBox(height: 10),
-                    pw.Text('Contact Info:',
-                        style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-                    pw.Text('$userPhone | $userEmail',
-                        style: pw.TextStyle(fontSize: 12)),
-                    pw.SizedBox(height: 20),
-                    pw.Text('Tax ID: $taxId',
-                        style: pw.TextStyle(
-                            fontSize: 14, fontWeight: pw.FontWeight.bold)),
-                    pw.SizedBox(height: 30),
-                    pw.Divider(),
-                    pw.Text('Thank you for your contribution!',
-                        style: pw.TextStyle(
-                            fontSize: 14, fontStyle: pw.FontStyle.italic)),
-                  ],
-                ),
+                      'Duration: $eventDuration hour(s)',
+                      style: const pw.TextStyle(fontSize: 13),
+                    ),
+                  pw.SizedBox(height: 24),
+
+                  // Divider
+                  pw.Container(
+                    width: double.infinity,
+                    height: 1,
+                    color: PdfColors.grey600,
+                  ),
+                  pw.SizedBox(height: 20),
+
+                  // 📞 Contact and Info Section
+                  pw.Text(
+                    'Participant Details:',
+                    style: pw.TextStyle(
+                      fontWeight: pw.FontWeight.bold,
+                      color: PdfColors.black,
+                      fontSize: 14,
+                    ),
+                  ),
+                  pw.SizedBox(height: 4),
+                  pw.Text('$userEmail • $userPhone', style: const pw.TextStyle(fontSize: 12)),
+                  pw.SizedBox(height: 10),
+                  pw.Text('Certificate ID: $taxId',
+                      style: pw.TextStyle(
+                          fontSize: 12,
+                          color: PdfColors.grey700,
+                          fontStyle: pw.FontStyle.italic)),
+                  pw.SizedBox(height: 20),
+
+                  // 🖋️ Signature Section
+                  pw.Row(
+                    mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                    children: [
+                      pw.Column(
+                        crossAxisAlignment: pw.CrossAxisAlignment.center,
+                        children: [
+                          pw.Container(
+                            width: 120,
+                            height: 1,
+                            color: PdfColors.black,
+                          ),
+                          pw.SizedBox(height: 4),
+                          pw.Text("Authorized Signature",
+                              style: const pw.TextStyle(fontSize: 12)),
+                        ],
+                      ),
+                      pw.Column(
+                        crossAxisAlignment: pw.CrossAxisAlignment.center,
+                        children: [
+                          pw.Container(
+                            width: 120,
+                            height: 1,
+                            color: PdfColors.black,
+                          ),
+                          pw.SizedBox(height: 4),
+                          pw.Text("Date: ${DateFormat('dd/MM/yyyy').format(DateTime.now())}",
+                              style: const pw.TextStyle(fontSize: 12)),
+                        ],
+                      ),
+                    ],
+                  ),
+                  pw.SizedBox(height: 30),
+
+                  // Footer thank-you message
+                  pw.Text(
+                    '“Thank you for your valuable contribution to the community.”',
+                    style: pw.TextStyle(
+                      fontStyle: pw.FontStyle.italic,
+                      color: PdfColor.fromInt(0xFF7D6608),
+                      fontSize: 13,
+                    ),
+                    textAlign: pw.TextAlign.center,
+                  ),
+                ],
               ),
             );
           },

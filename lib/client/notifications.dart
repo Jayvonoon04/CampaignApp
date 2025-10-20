@@ -102,7 +102,7 @@ class NotificationsPage extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   SvgPicture.asset(
-                    Utils.getSvgAsset('notification_empty'), // put your no notification icon here
+                    Utils.getSvgAsset('notification_empty'), // put no notification icon here
                     width: 100,
                     height: 100,
                   ),

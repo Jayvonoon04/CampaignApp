@@ -108,41 +108,65 @@ class _DonationsPageState extends State<DonationsPage> {
       final dataRows = allDonations.map((donation) {
         return [
           donation['cname'] ?? '',
-          donation['amount'].toString(),
-          (donation['date'] as DateTime).toString().split(' ')[0],
+          "RM ${donation['amount']}",
+          DateFormat('yyyy-MM-dd').format(donation['date']),
           donation['note'] ?? '',
         ];
       }).toList();
 
       pdf.addPage(
         pw.Page(
+          margin: const pw.EdgeInsets.all(24),
           build: (context) => pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
               pw.Text('Donations Report',
                   style: pw.TextStyle(
-                      fontSize: 24, fontWeight: pw.FontWeight.bold)),
+                      fontSize: 22, fontWeight: pw.FontWeight.bold)),
+              pw.SizedBox(height: 10),
+              pw.Text(
+                'Generated on ${DateFormat('MMMM dd, yyyy – hh:mm a').format(DateTime.now())}',
+                style: const pw.TextStyle(fontSize: 12, color: PdfColors.grey),
+              ),
               pw.SizedBox(height: 20),
               pw.Table.fromTextArray(
                 headers: headers,
                 data: dataRows,
                 border: pw.TableBorder.all(),
-                cellStyle: pw.TextStyle(fontSize: 10),
                 headerStyle: pw.TextStyle(
-                    fontSize: 12, fontWeight: pw.FontWeight.bold),
+                    fontWeight: pw.FontWeight.bold, color: PdfColors.white),
+                headerDecoration:
+                const pw.BoxDecoration(color: PdfColor.fromInt(0xFF6C63FF)),
+                cellStyle: const pw.TextStyle(fontSize: 10),
                 cellAlignment: pw.Alignment.centerLeft,
-                headerDecoration: pw.BoxDecoration(color: PdfColors.grey300),
+              ),
+              pw.Spacer(),
+              pw.Divider(),
+              pw.Align(
+                alignment: pw.Alignment.centerRight,
+                child: pw.Text(
+                  "Total Donated: RM ${allDonations.fold<num>(0, (sum, item) => sum + (item['amount'] as num))}",
+                  style: pw.TextStyle(
+                      fontSize: 14,
+                      fontWeight: pw.FontWeight.bold,
+                      color: PdfColors.black),
+                ),
               ),
             ],
           ),
         ),
       );
 
-      final outputDir = await getTemporaryDirectory();
-      final file = File('${outputDir.path}/donations_report.pdf');
-      await file.writeAsBytes(await pdf.save());
+      // 🔥 Convert to bytes
+      final pdfBytes = await pdf.save();
 
-      await Share.shareXFiles([XFile(file.path)],
-          text: 'Here is Your Donation Report');
+      // Navigate to preview page
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ReportPreviewPage(pdfBytes: pdfBytes),
+        ),
+      );
     } catch (e) {
       debugPrint('Error exporting PDF: $e');
     }
@@ -160,7 +184,7 @@ class _DonationsPageState extends State<DonationsPage> {
     final formattedAmount = formatter.format(amount);
     final formattedDate = DateFormat('MMMM dd, yyyy').format(date);
 
-    // ✅ Generate random Tax ID (6 digits)
+    // Generate Tax ID (6 digits)
     final random = Random();
     final taxId = "TAX-${random.nextInt(999999).toString().padLeft(6, '0')}";
 
@@ -478,6 +502,7 @@ class _DonationsPageState extends State<DonationsPage> {
       child: Wrap(
         spacing: 10,
         runSpacing: 8,
+        crossAxisAlignment: WrapCrossAlignment.center,
         children: [
           DropdownButton<String>(
             hint: const Text("Year"),
@@ -493,14 +518,18 @@ class _DonationsPageState extends State<DonationsPage> {
               applyFilters();
             },
           ),
+
+          // 📅 Pick date range
           ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.grey[200],
-                foregroundColor: Colors.black,
-                padding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10))),
+              backgroundColor: Colors.grey[200],
+              foregroundColor: Colors.black,
+              padding:
+              const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
             onPressed: () async {
               final picked = await showDateRangePicker(
                 context: context,
@@ -513,8 +542,32 @@ class _DonationsPageState extends State<DonationsPage> {
               }
             },
             icon: const Icon(Icons.date_range, size: 18),
-            label: const Text("Pick Date Range"),
+            label: Text(
+              selectedDateRange == null
+                  ? "Pick Date Range"
+                  : "${DateFormat('dd/MM/yy').format(selectedDateRange!.start)} - ${DateFormat('dd/MM/yy').format(selectedDateRange!.end)}",
+            ),
           ),
+
+          // 🧹 Clear Date Range Button
+          if (selectedDateRange != null)
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red[100],
+                foregroundColor: Colors.red[900],
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              onPressed: () {
+                setState(() => selectedDateRange = null);
+                applyFilters();
+              },
+              icon: const Icon(Icons.clear, size: 18),
+              label: const Text("Clear Date Range"),
+            ),
+
           SizedBox(
             width: 180,
             child: TextField(
@@ -537,6 +590,7 @@ class _DonationsPageState extends State<DonationsPage> {
               },
             ),
           ),
+
           // 🔥 Sort buttons
           Row(
             mainAxisSize: MainAxisSize.min,
@@ -574,7 +628,6 @@ class _DonationsPageState extends State<DonationsPage> {
       ),
     );
   }
-
   /// Progress bar widget
   Widget _buildProgressBar(List<int> milestones, num currentAmount) {
     final maxMilestone = milestones.last.toDouble();
@@ -633,6 +686,31 @@ class ReceiptPreviewPage extends StatelessWidget {
       ),
       body: PdfPreview(
         build: (format) => pdfFuture,
+        allowPrinting: true,
+        allowSharing: true,
+        canChangePageFormat: false,
+      ),
+    );
+  }
+}
+
+/// ------------------ Donations Report Preview Page ------------------
+class ReportPreviewPage extends StatelessWidget {
+  final Uint8List pdfBytes;
+
+  const ReportPreviewPage({super.key, required this.pdfBytes});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text("Donations Report"),
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black,
+        elevation: 1,
+      ),
+      body: PdfPreview(
+        build: (format) async => pdfBytes,
         allowPrinting: true,
         allowSharing: true,
         canChangePageFormat: false,

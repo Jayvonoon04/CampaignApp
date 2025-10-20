@@ -20,17 +20,35 @@ class ReportPage extends StatelessWidget {
     await FirebaseFirestore.instance.collection('users').doc(orgId).get();
     result['orgName'] = orgDoc.data()?['name'] ?? 'Unknown Org';
 
-    // Fetch reported user info from subcollection of volunteering
+    // Fetch volunteering user info
     final userDoc = await FirebaseFirestore.instance
         .collection('volunteering')
         .doc(volunteeringId)
         .collection('users')
         .doc(userId)
         .get();
+
     result['userName'] = userDoc.data()?['name'] ?? 'Unknown User';
     result['userEmail'] = userDoc.data()?['email'] ?? '';
 
     return result;
+  }
+
+  bool _isImage(String url) {
+    return url.toLowerCase().endsWith('.jpg') ||
+        url.toLowerCase().endsWith('.jpeg') ||
+        url.toLowerCase().endsWith('.png') ||
+        url.toLowerCase().endsWith('.gif') ||
+        url.toLowerCase().endsWith('.webp');
+  }
+
+  void _viewImage(BuildContext context, String imageUrl) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ImageViewerPage(imageUrl: imageUrl),
+      ),
+    );
   }
 
   @override
@@ -53,7 +71,6 @@ class ReportPage extends StatelessWidget {
           }
 
           final reports = snapshot.data!.docs;
-
           if (reports.isEmpty) {
             return const Center(child: Text("No reports available."));
           }
@@ -64,6 +81,8 @@ class ReportPage extends StatelessWidget {
             itemBuilder: (context, index) {
               var report = reports[index];
               var data = report.data() as Map<String, dynamic>;
+              final attachments =
+                  (data['attachments'] as List?)?.cast<String>() ?? [];
 
               return FutureBuilder<Map<String, dynamic>>(
                 future: _fetchOrgAndUser(
@@ -116,14 +135,56 @@ class ReportPage extends StatelessWidget {
                                       ? Colors.green
                                       : Colors.red)),
                           const SizedBox(height: 12),
+
+                          // 🔹 Show image attachments only
+                          if (attachments.isNotEmpty) ...[
+                            const Divider(),
+                            const Text(
+                              "Attachments:",
+                              style: TextStyle(
+                                  fontWeight: FontWeight.bold, fontSize: 15),
+                            ),
+                            const SizedBox(height: 8),
+                            GridView.builder(
+                              shrinkWrap: true,
+                              physics: const NeverScrollableScrollPhysics(),
+                              gridDelegate:
+                              const SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: 3,
+                                crossAxisSpacing: 8,
+                                mainAxisSpacing: 8,
+                              ),
+                              itemCount: attachments.length,
+                              itemBuilder: (context, i) {
+                                final url = attachments[i];
+                                return GestureDetector(
+                                  onTap: () => _viewImage(context, url),
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: Image.network(
+                                      url,
+                                      fit: BoxFit.cover,
+                                      errorBuilder:
+                                          (context, error, stackTrace) {
+                                        return const Icon(Icons.broken_image,
+                                            color: Colors.red);
+                                      },
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                            const SizedBox(height: 10),
+                          ],
+
+                          // Action buttons
                           Row(
                             mainAxisAlignment: MainAxisAlignment.end,
                             children: [
                               TextButton.icon(
                                 onPressed: isPending
-                                    ? () =>
-                                    _updateStatus(report.id, "accepted")
-                                    : null, // disabled if not pending
+                                    ? () => _updateStatus(report.id, "accepted")
+                                    : null,
                                 icon: Icon(Icons.check_circle,
                                     color: isPending
                                         ? Colors.green
@@ -133,15 +194,15 @@ class ReportPage extends StatelessWidget {
                               const SizedBox(width: 8),
                               TextButton.icon(
                                 onPressed: isPending
-                                    ? () =>
-                                    _updateStatus(report.id, "rejected")
-                                    : null, // disabled if not pending
+                                    ? () => _updateStatus(report.id, "rejected")
+                                    : null,
                                 icon: Icon(Icons.cancel,
-                                    color: isPending ? Colors.red : Colors.grey),
+                                    color:
+                                    isPending ? Colors.red : Colors.grey),
                                 label: const Text("Reject"),
                               ),
                             ],
-                          )
+                          ),
                         ],
                       ),
                     ),
@@ -151,6 +212,31 @@ class ReportPage extends StatelessWidget {
             },
           );
         },
+      ),
+    );
+  }
+}
+
+// 🖼️ Full-screen Image Viewer Page
+class ImageViewerPage extends StatelessWidget {
+  final String imageUrl;
+  const ImageViewerPage({super.key, required this.imageUrl});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text("View Image")),
+      body: Center(
+        child: InteractiveViewer(
+          maxScale: 5.0,
+          minScale: 0.5,
+          child: Image.network(
+            imageUrl,
+            fit: BoxFit.contain,
+            errorBuilder: (context, error, stackTrace) =>
+            const Icon(Icons.broken_image, size: 100, color: Colors.red),
+          ),
+        ),
       ),
     );
   }
