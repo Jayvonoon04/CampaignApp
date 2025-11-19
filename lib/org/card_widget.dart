@@ -13,6 +13,9 @@ class VolunteeringInfoCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final Timestamp? ts = data['date'] as Timestamp?;
+    final DateTime? date = ts?.toDate();
+
     return Card(
       color: Colors.white,
       elevation: 4,
@@ -22,13 +25,16 @@ class VolunteeringInfoCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            /// Header row with title and edit button
+            /// ---------------- Header Row ----------------
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
                   data['title'] ?? 'Volunteering Info',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleLarge
+                      ?.copyWith(fontWeight: FontWeight.bold),
                 ),
                 IconButton(
                   icon: const Icon(Icons.edit, color: Colors.blueAccent),
@@ -40,24 +46,36 @@ class VolunteeringInfoCard extends StatelessWidget {
 
             const SizedBox(height: 12),
 
-            /// Description
-            if (data['desc'] != null) ...[
+            /// ---------------- Description ----------------
+            if (data['desc'] != null && data['desc'].toString().isNotEmpty)
               Text(
                 data['desc'],
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
-              const SizedBox(height: 16),
-            ],
 
-            /// Metadata section
+            const SizedBox(height: 16),
+
+            /// ---------------- Info Items ----------------
             Wrap(
-              runSpacing: 10,
               spacing: 20,
+              runSpacing: 12,
               children: [
-                _infoItem("Goal", "${data['targetAmount'] ?? 'N/A'} RM"),
-                _infoItem("Raised", "${data['fundsRaised'] ?? '0'} RM"),
+                _infoItem("Date", date != null ? "${date.day}/${date.month}/${date.year}" : "N/A"),
+                _infoItem("Start Time", data['start_time'] ?? 'N/A'),
+                _infoItem("End Time", data['end_time'] ?? 'N/A'),
+                _infoItem("Duration", "${data['duration'] ?? 'N/A'} hours"),
+                _infoItem("Location", data['location'] ?? 'N/A'),
+                _infoItem("Target", data['targetusers'] ?? 'N/A'),
                 _infoItem("Live", data['live'] == true ? "Yes" : "No"),
-                _infoItem("Date Added", (data['dateAdded'] as Timestamp?)?.toDate().toString().split(' ').first ?? 'N/A'),
+                _infoItem(
+                  "Added",
+                  (data['dateAdded'] as Timestamp?)
+                      ?.toDate()
+                      .toString()
+                      .split(' ')
+                      .first ??
+                      'N/A',
+                ),
               ],
             ),
           ],
@@ -66,12 +84,22 @@ class VolunteeringInfoCard extends StatelessWidget {
     );
   }
 
+  /// Small reusable item for label + value
   Widget _infoItem(String label, String value) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text("$label: ", style: const TextStyle(fontWeight: FontWeight.w600)),
-        Text(value, style: const TextStyle(color: Colors.black87)),
+        Text(
+          "$label: ",
+          style: const TextStyle(fontWeight: FontWeight.w600),
+        ),
+        Flexible(
+          child: Text(
+            value,
+            style: const TextStyle(color: Colors.black87),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
       ],
     );
   }

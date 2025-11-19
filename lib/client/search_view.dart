@@ -10,6 +10,7 @@ class ResultsPage extends StatefulWidget {
 }
 
 class _ResultsPageState extends State<ResultsPage> {
+  // Temporary mocked listings data for the results page
   final List<Map<String, dynamic>> listings = [
     {
       'title': 'Giving Homes',
@@ -31,6 +32,7 @@ class _ResultsPageState extends State<ResultsPage> {
     },
   ];
 
+  /// Simple bottom sheet to show filter options (placeholder for now)
   void _showFilterModal() {
     showModalBottomSheet(
       context: context,
@@ -40,7 +42,10 @@ class _ResultsPageState extends State<ResultsPage> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text("Filter by Date", style: TextStyle(fontWeight: FontWeight.bold)),
+              const Text(
+                "Filter by Date",
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
               const SizedBox(height: 12),
               ElevatedButton(
                 onPressed: () => Navigator.pop(context),
@@ -53,6 +58,7 @@ class _ResultsPageState extends State<ResultsPage> {
     );
   }
 
+  /// Navigate to detail screen using named route and passing the item as argument
   void _goToDetail(Map<String, dynamic> data) {
     Navigator.pushNamed(context, '/DetailView', arguments: data);
   }
@@ -61,6 +67,7 @@ class _ResultsPageState extends State<ResultsPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
+      // AppBar with read-only search field showing the keyword
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
@@ -71,7 +78,10 @@ class _ResultsPageState extends State<ResultsPage> {
             hintText: "Search...",
             filled: true,
             fillColor: Color(0xFFF5F5F5),
-            border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12)), borderSide: BorderSide.none),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.all(Radius.circular(12)),
+              borderSide: BorderSide.none,
+            ),
           ),
           readOnly: true,
         ),
@@ -82,31 +92,51 @@ class _ResultsPageState extends State<ResultsPage> {
           )
         ],
       ),
+      // List of search results cards
       body: ListView.builder(
         padding: const EdgeInsets.all(16),
         itemCount: listings.length,
         itemBuilder: (context, index) {
           final item = listings[index];
           return Card(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
             margin: const EdgeInsets.only(bottom: 16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Top image of listing
                 ClipRRect(
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-                  child: Image.network(item['image'], height: 160, width: double.infinity, fit: BoxFit.cover),
+                  borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(12)),
+                  child: Image.network(
+                    item['image'],
+                    height: 160,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                  ),
                 ),
+                // Details section
                 Padding(
                   padding: const EdgeInsets.all(12),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(item['title'], style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                      // Title
+                      Text(
+                        item['title'],
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                       const SizedBox(height: 4),
+                      // Rating, reviews, provider and type chip
                       Row(
                         children: [
-                          Icon(Icons.star, color: Colors.amber, size: 16),
+                          const Icon(Icons.star,
+                              color: Colors.amber, size: 16),
                           Text('${item['rating']} (${item['reviews']} reviews)'),
                           const SizedBox(width: 10),
                           Text('• ${item['provider']}'),
@@ -114,21 +144,32 @@ class _ResultsPageState extends State<ResultsPage> {
                           Chip(
                             label: Text(item['type']),
                             backgroundColor: Colors.black,
-                            labelStyle: const TextStyle(color: Colors.white),
-                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            labelStyle:
+                            const TextStyle(color: Colors.white),
+                            padding:
+                            const EdgeInsets.symmetric(horizontal: 8),
                           )
                         ],
                       ),
                       const SizedBox(height: 8),
+                      // Price + "More" button
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text('\$${item['price']}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                          Text(
+                            '\$${item['price']}',
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                           ElevatedButton(
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.black,
                               foregroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
                             ),
                             onPressed: () => _goToDetail(item),
                             child: const Text("More"),

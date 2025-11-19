@@ -13,15 +13,26 @@ class ReportPage extends StatefulWidget {
 }
 
 class _ReportPageState extends State<ReportPage> {
+  /// Selected volunteer user ID (from volunteering users)
   String? selectedUserId;
+
+  /// Selected predefined reason (from reasons list)
   String? selectedReason;
+
+  /// Volunteering event ID related to the reported user
   String? selectedVolunteeringId;
+
+  /// Free-text custom reason (when none of the predefined reasons fit)
   final customReasonController = TextEditingController();
+
+  /// Loading flag for submit button (prevents double submit)
   bool loading = false;
 
-  // ✅ Attachment variables (only images)
+  // ========== ATTACHMENTS (IMAGES ONLY, MAX 5) ==========
+  /// Selected image files (PlatformFile from file_picker)
   List<PlatformFile> selectedFiles = [];
 
+  /// Predefined reasons list
   final List<String> reasons = [
     "Inappropriate behavior",
     "No show / Did not attend",
@@ -29,29 +40,37 @@ class _ReportPageState extends State<ReportPage> {
     "Harassment or abuse",
   ];
 
-  // Fetch volunteers related to this organization
+  // =====================================================
+  // 🔍 Fetch volunteers that belong to this organization
+  // and **have not been accepted as reported** yet.
+  // =====================================================
   Future<List<Map<String, dynamic>>> _fetchVolunteers() async {
     final orgId = FirebaseAuth.instance.currentUser!.uid;
 
+    // 1. Get existing accepted reports for this org
     final acceptedReports = await FirebaseFirestore.instance
         .collection('reports')
         .where('orgId', isEqualTo: orgId)
         .where('status', isEqualTo: 'accepted')
         .get();
 
+    // Set of user IDs already accepted as reported (banned)
     final reportedUserIds =
     acceptedReports.docs.map((doc) => doc['userId'] as String).toSet();
 
+    // 2. Get volunteering campaigns created by this org
     final volunteeringDocs = await FirebaseFirestore.instance
         .collection('volunteering')
         .where('userid', isEqualTo: orgId)
         .get();
 
+    // Use a map to ensure unique volunteers across different campaigns
     Map<String, Map<String, dynamic>> uniqueUsers = {};
 
     for (var vDoc in volunteeringDocs.docs) {
       final usersSnap = await vDoc.reference.collection('users').get();
       for (var uDoc in usersSnap.docs) {
+        // Skip users already in accepted reports
         if (reportedUserIds.contains(uDoc.id)) continue;
 
         final data = uDoc.data();
@@ -67,7 +86,10 @@ class _ReportPageState extends State<ReportPage> {
     return uniqueUsers.values.toList();
   }
 
-  /// 📁 Pick only image files (jpg, jpeg, png)
+  // =====================================================
+  // 📁 Pick only image files (jpg, jpeg, png)
+  // AND enforce a MAXIMUM of 5 attachments.
+  // =====================================================
   Future<void> _pickFiles() async {
     try {
       final result = await FilePicker.platform.pickFiles(
@@ -79,10 +101,11 @@ class _ReportPageState extends State<ReportPage> {
       if (result != null) {
         final newFiles = result.files;
 
-        // Combine new selections with existing ones, but limit to 5
+        // Combine existing selections + newly picked files
         final totalFiles = [...selectedFiles, ...newFiles];
 
         if (totalFiles.length > 5) {
+          // If combined > 5, keep only first 5 and show a warning
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text("⚠️ You can only upload up to 5 images."),
@@ -90,9 +113,10 @@ class _ReportPageState extends State<ReportPage> {
             ),
           );
           setState(() {
-            selectedFiles = totalFiles.take(5).toList(); // keep only 5
+            selectedFiles = totalFiles.take(5).toList(); // Hard limit to 5
           });
         } else {
+          // Otherwise, just update normally
           setState(() {
             selectedFiles = totalFiles;
           });
@@ -109,7 +133,10 @@ class _ReportPageState extends State<ReportPage> {
     }
   }
 
-  /// ☁️ Upload selected attachments (images only)
+  // =====================================================
+  // ☁️ Upload selected attachments (images only) to Storage
+  // and return their download URLs
+  // =====================================================
   Future<List<String>> _uploadAttachments(String reportId) async {
     List<String> downloadUrls = [];
 
@@ -134,14 +161,22 @@ class _ReportPageState extends State<ReportPage> {
     return downloadUrls;
   }
 
-  /// 📨 Submit report to Firestore
+  // =====================================================
+  // 📨 Submit report document to Firestore:
+  // - Validate selection
+  // - Create 'reports' doc
+  // - Upload attachments (max 5 images)
+  // - Update report with attachment URLs
+  // =====================================================
   Future<void> _submitReport() async {
+    // Basic validation for user & reason
     if (selectedUserId == null ||
         (selectedReason == null && customReasonController.text.isEmpty)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-            content: Text("⚠️ Please select a user and provide a reason."),
-            backgroundColor: Colors.red),
+          content: Text("⚠️ Please select a user and provide a reason."),
+          backgroundColor: Colors.red,
+        ),
       );
       return;
     }
@@ -152,7 +187,7 @@ class _ReportPageState extends State<ReportPage> {
       final orgId = FirebaseAuth.instance.currentUser!.uid;
       final reason = selectedReason ?? customReasonController.text.trim();
 
-      // Step 1️⃣: Create Firestore entry
+      // 1️⃣ Create base report document
       final reportRef =
       await FirebaseFirestore.instance.collection('reports').add({
         'orgId': orgId,
@@ -161,10 +196,10 @@ class _ReportPageState extends State<ReportPage> {
         'reason': reason,
         'createdAt': Timestamp.now(),
         'status': 'pending',
-        'attachments': [],
+        'attachments': [], // Will be updated after upload
       });
 
-      // Step 2️⃣: Upload attachments (optional)
+      // 2️⃣ Upload attachments (if any) and patch doc
       if (selectedFiles.isNotEmpty) {
         final attachmentUrls = await _uploadAttachments(reportRef.id);
         await reportRef.update({'attachments': attachmentUrls});
@@ -173,9 +208,11 @@ class _ReportPageState extends State<ReportPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-              content: Text("✅ Report submitted successfully."),
-              backgroundColor: Colors.green),
+            content: Text("✅ Report submitted successfully."),
+            backgroundColor: Colors.green,
+          ),
         );
+        // Reset form state after successful submission
         setState(() {
           selectedFiles.clear();
           selectedUserId = null;
@@ -196,7 +233,9 @@ class _ReportPageState extends State<ReportPage> {
     }
   }
 
-  /// 🔁 Fetch and display reports from the same organization
+  // =====================================================
+  // 🔁 Stream organisation reports & resolve volunteer names
+  // =====================================================
   Stream<List<Map<String, dynamic>>> _getOrgReports() {
     final orgId = FirebaseAuth.instance.currentUser!.uid;
 
@@ -212,6 +251,7 @@ class _ReportPageState extends State<ReportPage> {
         String userName = "Unknown User";
         String userEmail = "";
 
+        // Try to fetch reported user details from volunteering/users subcollection
         try {
           final userDoc = await FirebaseFirestore.instance
               .collection('volunteering')
@@ -236,6 +276,7 @@ class _ReportPageState extends State<ReportPage> {
         });
       }
 
+      // Sort by newest first
       reports.sort((a, b) =>
           (b['createdAt'] as Timestamp).compareTo(a['createdAt'] as Timestamp));
 
@@ -243,6 +284,7 @@ class _ReportPageState extends State<ReportPage> {
     });
   }
 
+  // Status color helper for report list
   Color _statusColor(String status) {
     switch (status) {
       case 'pending':
@@ -256,6 +298,7 @@ class _ReportPageState extends State<ReportPage> {
     }
   }
 
+  // Status icon helper for report list
   IconData _statusIcon(String status) {
     switch (status) {
       case 'pending':
@@ -280,21 +323,25 @@ class _ReportPageState extends State<ReportPage> {
       ),
       body: Column(
         children: [
-          // Volunteer selection
+          // ===================== Volunteer Selection =====================
           Expanded(
             child: FutureBuilder<List<Map<String, dynamic>>>(
               future: _fetchVolunteers(),
               builder: (context, snapshot) {
                 if (snapshot.hasError) {
                   return Center(
-                      child: Text("❌ Error loading volunteers: ${snapshot.error}"));
+                    child: Text(
+                      "❌ Error loading volunteers: ${snapshot.error}",
+                    ),
+                  );
                 }
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
                 }
                 if (!snapshot.hasData || snapshot.data!.isEmpty) {
                   return const Center(
-                      child: Text("No volunteers available to report."));
+                    child: Text("No volunteers available to report."),
+                  );
                 }
 
                 final volunteers = snapshot.data!;
@@ -303,7 +350,8 @@ class _ReportPageState extends State<ReportPage> {
                   margin: const EdgeInsets.all(12),
                   elevation: 3,
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                   child: ListView.builder(
                     padding: const EdgeInsets.all(8),
                     itemCount: volunteers.length,
@@ -311,9 +359,10 @@ class _ReportPageState extends State<ReportPage> {
                       final v = volunteers[index];
 
                       return RadioListTile<String>(
-                        title: Text(v['name'],
-                            style:
-                            const TextStyle(fontWeight: FontWeight.w600)),
+                        title: Text(
+                          v['name'],
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
                         subtitle: Text(v['email']),
                         value: v['uid'],
                         groupValue: selectedUserId,
@@ -334,18 +383,22 @@ class _ReportPageState extends State<ReportPage> {
 
           const Divider(),
 
-          // Report reasons + attachments
+          // ===================== Reason & Attachments =====================
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: SingleChildScrollView(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text("⚠️ Reason for report",
-                      style:
-                      TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  // Reason title
+                  const Text(
+                    "⚠️ Reason for report",
+                    style:
+                    TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
                   const SizedBox(height: 8),
 
+                  // Predefined reasons radio group
                   ...reasons.map(
                         (r) => RadioListTile<String>(
                       title: Text(r),
@@ -355,12 +408,14 @@ class _ReportPageState extends State<ReportPage> {
                       onChanged: (val) {
                         setState(() {
                           selectedReason = val;
+                          // Clear custom text if a predefined reason is selected
                           customReasonController.clear();
                         });
                       },
                     ),
                   ),
 
+                  // Custom "Other reason" field
                   TextField(
                     controller: customReasonController,
                     maxLines: 2,
@@ -369,6 +424,7 @@ class _ReportPageState extends State<ReportPage> {
                       border: OutlineInputBorder(),
                     ),
                     onChanged: (val) {
+                      // If typing custom reason, unselect predefined reason
                       if (val.isNotEmpty) {
                         setState(() => selectedReason = null);
                       }
@@ -377,9 +433,10 @@ class _ReportPageState extends State<ReportPage> {
 
                   const SizedBox(height: 20),
 
-                  // 📎 Attachment Section
+                  // ===================== Attachments section =====================
                   Row(
                     children: [
+                      // Add Images button (disabled when already at 5)
                       ElevatedButton.icon(
                         onPressed:
                         selectedFiles.length >= 5 ? null : _pickFiles,
@@ -391,16 +448,17 @@ class _ReportPageState extends State<ReportPage> {
                         ),
                       ),
                       const SizedBox(width: 10),
+
+                      // Counter text: e.g. "2/5 selected"
                       if (selectedFiles.isNotEmpty)
                         Text(
                           "${selectedFiles.length}/5 selected",
-                          style:
-                          const TextStyle(fontWeight: FontWeight.w500),
+                          style: const TextStyle(fontWeight: FontWeight.w500),
                         ),
                     ],
                   ),
 
-                  // Display selected image names
+                  // List of selected image file names with delete buttons
                   if (selectedFiles.isNotEmpty)
                     Column(
                       children: selectedFiles.map((file) {
@@ -427,7 +485,7 @@ class _ReportPageState extends State<ReportPage> {
 
                   const SizedBox(height: 10),
 
-                  // Submit button
+                  // ===================== Submit button =====================
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton.icon(
@@ -460,20 +518,25 @@ class _ReportPageState extends State<ReportPage> {
 
           const Divider(),
 
-          // Reports list section
+          // ===================== Reports List Section =====================
           Expanded(
             child: StreamBuilder<List<Map<String, dynamic>>>(
               stream: _getOrgReports(),
               builder: (context, snapshot) {
                 if (snapshot.hasError) {
                   return Center(
-                      child: Text("❌ Error loading reports: ${snapshot.error}"));
+                    child: Text(
+                      "❌ Error loading reports: ${snapshot.error}",
+                    ),
+                  );
                 }
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
                 }
                 if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                  return const Center(child: Text("No reports submitted yet."));
+                  return const Center(
+                    child: Text("No reports submitted yet."),
+                  );
                 }
 
                 final reports = snapshot.data!;
@@ -487,10 +550,13 @@ class _ReportPageState extends State<ReportPage> {
 
                     return Card(
                       margin: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 6),
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
                       elevation: 3,
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12)),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                       child: ListTile(
                         leading: CircleAvatar(
                           backgroundColor: statusColor.withOpacity(0.2),
@@ -504,8 +570,10 @@ class _ReportPageState extends State<ReportPage> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text("Reason: ${r['reason']}"),
-                            Text("Status: ${r['status']}",
-                                style: TextStyle(color: statusColor)),
+                            Text(
+                              "Status: ${r['status']}",
+                              style: TextStyle(color: statusColor),
+                            ),
                             if (r['attachments'] != null &&
                                 (r['attachments'] as List).isNotEmpty)
                               Text(

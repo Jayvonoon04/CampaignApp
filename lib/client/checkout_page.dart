@@ -3,7 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 class CheckoutPage extends StatefulWidget {
-  final String id;
+  final String id; // Firestore document ID for the selected donation campaign
 
   const CheckoutPage({super.key, required this.id});
 
@@ -12,31 +12,42 @@ class CheckoutPage extends StatefulWidget {
 }
 
 class _CheckoutPageState extends State<CheckoutPage> {
+  // Controller for the custom amount input
   final TextEditingController _amountController = TextEditingController();
+
+  // Currently selected payment method (default: card)
   String _selectedMethod = "card"; // default
+
+  // Error text for amount validation (shown under TextField)
   String? _errorText;
 
   @override
   void dispose() {
+    // Dispose controller to prevent memory leaks
     _amountController.dispose();
     super.dispose();
   }
 
+  /// Validate amount & navigate to the appropriate payment page
   void _submit(String title) {
     final amountText = _amountController.text.trim();
 
-    // validation
+    // Basic empty check
     if (amountText.isEmpty) {
       setState(() => _errorText = "Amount cannot be empty");
       return;
     }
+
+    // Regex: allows whole numbers or numbers with up to 2 decimal places
     if (!RegExp(r'^\d+(\.\d{1,2})?$').hasMatch(amountText)) {
-      setState(() => _errorText = "Enter a valid number (e.g. 100 or 50.75)");
+      setState(
+              () => _errorText = "Enter a valid number (e.g. 100 or 50.75)");
       return;
     }
 
     final double enteredAmount = double.parse(amountText);
 
+    // Only card is supported for now
     if (_selectedMethod == "card") {
       Navigator.push(
         context,
@@ -49,6 +60,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
         ),
       );
     } else {
+      // For other methods, show simple "not supported" message
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("$_selectedMethod is not supported yet")),
       );
@@ -67,33 +79,40 @@ class _CheckoutPageState extends State<CheckoutPage> {
         foregroundColor: Colors.black,
         elevation: 1,
       ),
+      // Load donation campaign details based on the passed id
       body: FutureBuilder<DocumentSnapshot>(
-        future:
-        FirebaseFirestore.instance.collection('donations').doc(widget.id).get(),
+        future: FirebaseFirestore.instance
+            .collection('donations')
+            .doc(widget.id)
+            .get(),
         builder: (context, snapshot) {
+          // Show loading spinner while fetching data
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
 
+          // Show error message if donation campaign is not found
           if (!snapshot.hasData || !snapshot.data!.exists) {
             return const Center(child: Text("Donation campaign not found"));
           }
 
+          // Extract donation data
           final data = snapshot.data!.data() as Map<String, dynamic>;
           final title = data['title'] ?? 'No Title';
           final desc = data['desc'] ?? 'No Description';
+          // Use stored banner URL or fallback placeholder image
           final String imageUrl = data['banner'] ??
               'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQPoQskEk1fiLX-JBYP5ut55b6PzinJ0PRQag&s';
 
           return SingleChildScrollView(
             child: Column(
               children: [
-                // Hero Image Header
+                // 🔹 Hero Image Header with overlay
                 Stack(
                   children: [
                     ClipRRect(
-                      borderRadius:
-                      const BorderRadius.vertical(bottom: Radius.circular(24)),
+                      borderRadius: const BorderRadius.vertical(
+                          bottom: Radius.circular(24)),
                       child: Image.network(
                         imageUrl,
                         width: double.infinity,
@@ -101,11 +120,12 @@ class _CheckoutPageState extends State<CheckoutPage> {
                         fit: BoxFit.cover,
                       ),
                     ),
+                    // Gradient overlay for better text contrast
                     Container(
                       height: 220,
                       decoration: BoxDecoration(
-                        borderRadius:
-                        const BorderRadius.vertical(bottom: Radius.circular(24)),
+                        borderRadius: const BorderRadius.vertical(
+                            bottom: Radius.circular(24)),
                         gradient: LinearGradient(
                           colors: [
                             Colors.black.withOpacity(0.6),
@@ -116,6 +136,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                         ),
                       ),
                     ),
+                    // Campaign title on top of image
                     Positioned(
                       left: 20,
                       bottom: 20,
@@ -137,7 +158,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
                 const SizedBox(height: 20),
 
-                // Description
+                // 🔹 Campaign Description
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: Text(
@@ -152,7 +173,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
                 const SizedBox(height: 30),
 
-                // 🔸 Payment Method Section (Glass-like Card)
+                // 🔹 Payment Method Section (glass-like card)
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: Container(
@@ -180,6 +201,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                         ),
                         const SizedBox(height: 16),
 
+                        // Credit / Debit card option (supported)
                         _buildPaymentOption(
                           "card",
                           "Credit / Debit Card",
@@ -187,6 +209,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                           accent,
                         ),
                         const SizedBox(height: 8),
+                        // Apple Pay option (not supported yet - will show snackbar)
                         _buildPaymentOption(
                           "Apple Pay",
                           "Apple Pay",
@@ -194,6 +217,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                           accent,
                         ),
                         const SizedBox(height: 8),
+                        // Google Pay option (not supported yet - will show snackbar)
                         _buildPaymentOption(
                           "Google Pay",
                           "Google Pay",
@@ -207,7 +231,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
                 const SizedBox(height: 30),
 
-                // 💰 Amount Section
+                // 🔹 Amount input section
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: Container(
@@ -236,11 +260,14 @@ class _CheckoutPageState extends State<CheckoutPage> {
                         const SizedBox(height: 14),
                         TextField(
                           controller: _amountController,
-                          keyboardType: const TextInputType.numberWithOptions(
+                          keyboardType:
+                          const TextInputType.numberWithOptions(
                               decimal: true),
                           decoration: InputDecoration(
-                            prefixIcon:
-                            const Icon(Icons.attach_money, color: Colors.green),
+                            prefixIcon: const Icon(
+                              Icons.attach_money,
+                              color: Colors.green,
+                            ),
                             hintText: "e.g. 100 or 50.75",
                             errorText: _errorText,
                             filled: true,
@@ -267,7 +294,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
                 const SizedBox(height: 40),
 
-                // 🌟 Donate Button
+                // 🔹 Donate button (submits amount + navigates to card page if valid)
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: SizedBox(
@@ -285,8 +312,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
                       ),
                       child: const Text(
                         "Donate Now",
-                        style:
-                        TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                   ),
@@ -301,7 +330,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
     );
   }
 
-  // ✅ Custom Widget for Payment Option
+  // ✅ Custom widget for each payment option (uses state to highlight selection)
   Widget _buildPaymentOption(
       String value,
       String title,
@@ -309,7 +338,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
       Color accent,
       ) {
     final isSelected = _selectedMethod == value;
+
     return InkWell(
+      // When tapped, update the selected payment method
       onTap: () => setState(() => _selectedMethod = value),
       borderRadius: BorderRadius.circular(14),
       child: AnimatedContainer(
@@ -325,10 +356,12 @@ class _CheckoutPageState extends State<CheckoutPage> {
         ),
         child: Row(
           children: [
+            // Icon inside a small circle
             CircleAvatar(
               radius: 18,
-              backgroundColor:
-              isSelected ? Colors.white : Colors.black.withOpacity(0.1),
+              backgroundColor: isSelected
+                  ? Colors.white
+                  : Colors.black.withOpacity(0.1),
               child: Icon(
                 icon,
                 color: isSelected ? Colors.blue : Colors.grey[700],
@@ -336,6 +369,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
               ),
             ),
             const SizedBox(width: 12),
+            // Payment method title
             Expanded(
               child: Text(
                 title,
@@ -346,6 +380,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                 ),
               ),
             ),
+            // Check icon to indicate selected option
             Icon(
               isSelected ? Icons.check_circle : Icons.circle_outlined,
               color: isSelected ? Colors.white : Colors.grey,

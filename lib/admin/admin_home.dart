@@ -1,4 +1,3 @@
-import 'package:charity/admin/admin_home.dart';
 import 'package:charity/admin/organizations.dart';
 import 'package:charity/admin/requests.dart';
 import 'package:charity/admin/report_page.dart'; // ✅ New import
@@ -20,7 +19,7 @@ class _AdminHomeState extends State<AdminHome> {
   final List<Widget> _adminPages = [
     const AdminRequestsPage(), // Requests page
     const AdminOrgsPage(),     // Organizations page
-    const ReportPage(),        // ✅ New Report Page
+    const ReportPage(),        // New Report Page
   ];
 
   Future<void> _logout() async {

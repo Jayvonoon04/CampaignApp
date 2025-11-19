@@ -70,7 +70,7 @@ class _GetStartedState extends State<GetStarted> {
           Positioned(
             left: 0,
             right: 0,
-            bottom: MediaQuery.of(context).size.height * 0.25,
+            bottom: 120,
             child: Center(
               child: SmoothPageIndicator(
                 controller: _pageController,

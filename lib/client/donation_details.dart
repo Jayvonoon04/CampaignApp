@@ -7,7 +7,7 @@ class DetailView extends StatelessWidget {
 
   const DetailView({super.key, required this.id});
 
-  /// Get organization (user) data directly from `users/{userId}`
+  /// Stream organization data from Firestore (users collection)
   Stream<DocumentSnapshot> getOrgData(String userId) {
     return FirebaseFirestore.instance
         .collection("users")
@@ -19,14 +19,16 @@ class DetailView extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
+
+      /// Fetch donation details once using FutureBuilder
       body: FutureBuilder<DocumentSnapshot>(
-        future:
-        FirebaseFirestore.instance.collection('donations').doc(id).get(),
+        future: FirebaseFirestore.instance.collection('donations').doc(id).get(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
 
+          /// Handle missing or invalid donation document
           if (!snapshot.hasData || !snapshot.data!.exists) {
             return const Center(
               child: Column(
@@ -40,17 +42,22 @@ class DetailView extends StatelessWidget {
             );
           }
 
+          /// Extract donation fields safely
           final data = snapshot.data!.data() as Map<String, dynamic>;
-
           final String title = data['title'] ?? 'No Title';
           final String desc = data['desc'] ?? 'No Description';
           final double targetAmount = (data['targetAmount'] ?? 0).toDouble();
           final double fundsRaised = (data['fundsRaised'] ?? 0).toDouble();
           final String userId = data['userid'] ?? '';
+
+          /// Convert Firestore timestamp to DateTime
           final Timestamp? timestamp = data['dateAdded'];
           final DateTime dateAdded = timestamp?.toDate() ?? DateTime.now();
+
+          /// Calculate progress bar value
           final double progress = (fundsRaised / targetAmount).clamp(0.0, 1.0);
 
+          /// Stream organization data live (updates in real-time)
           return StreamBuilder<DocumentSnapshot>(
             stream: getOrgData(userId),
             builder: (context, orgSnap) {
@@ -58,6 +65,7 @@ class DetailView extends StatelessWidget {
 
               return Column(
                 children: [
+                  /// Custom AppBar inside Column (for scrollable layout)
                   AppBar(
                     backgroundColor: Colors.white,
                     foregroundColor: Colors.black,
@@ -68,13 +76,15 @@ class DetailView extends StatelessWidget {
                     ),
                     centerTitle: true,
                   ),
+
+                  /// Scrollable donation content
                   Expanded(
                     child: SingleChildScrollView(
                       padding: const EdgeInsets.all(16),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Banner Image
+                          /// Banner image of the donation
                           ClipRRect(
                             borderRadius: BorderRadius.circular(16),
                             child: Image.network(
@@ -87,7 +97,7 @@ class DetailView extends StatelessWidget {
                           ),
                           const SizedBox(height: 24),
 
-                          // Raised vs Goal Progress
+                          /// Raised vs Target labels
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
@@ -100,6 +110,8 @@ class DetailView extends StatelessWidget {
                             ],
                           ),
                           const SizedBox(height: 4),
+
+                          /// Progress bar showing fundraising progress
                           LinearProgressIndicator(
                             value: progress,
                             backgroundColor: Colors.grey[300],
@@ -107,6 +119,8 @@ class DetailView extends StatelessWidget {
                             minHeight: 10,
                           ),
                           const SizedBox(height: 8),
+
+                          /// Amount labels (Raised vs Target)
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
@@ -122,7 +136,7 @@ class DetailView extends StatelessWidget {
                           ),
                           const SizedBox(height: 24),
 
-                          // Description
+                          /// Donation description text
                           Text(
                             desc,
                             style: const TextStyle(
@@ -136,7 +150,7 @@ class DetailView extends StatelessWidget {
                           const Divider(),
                           const SizedBox(height: 16),
 
-                          // Organization Details
+                          /// Organization Profile Details
                           Text("Organization Details",
                               style: const TextStyle(
                                   fontWeight: FontWeight.bold,
@@ -144,10 +158,12 @@ class DetailView extends StatelessWidget {
                                   color: Colors.black)),
                           const SizedBox(height: 12),
 
+                          /// Display organization info if exists
                           if (orgData != null) ...[
                             Center(
                               child: Column(
                                 children: [
+                                  /// Organization profile image
                                   CircleAvatar(
                                     radius: 40,
                                     backgroundImage: orgData['photo'] != null
@@ -158,6 +174,8 @@ class DetailView extends StatelessWidget {
                                         : null,
                                   ),
                                   const SizedBox(height: 8),
+
+                                  /// Name + Verified badge
                                   Row(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
@@ -176,21 +194,23 @@ class DetailView extends StatelessWidget {
                                     ],
                                   ),
                                   const SizedBox(height: 8),
+
+                                  /// Contact details
                                   Text("Email: ${orgData['email'] ?? 'N/A'}"),
                                   Text("Phone: ${orgData['phone'] ?? 'N/A'}"),
-                                  Text(
-                                      "Location: ${orgData['location'] ?? 'N/A'}"),
+                                  Text("Location: ${orgData['location'] ?? 'N/A'}"),
                                 ],
                               ),
                             ),
                           ] else
+                          /// Fallback when no organization data found
                             const Center(
                               child: Text("No organization details found."),
                             ),
 
                           const SizedBox(height: 24),
 
-                          // Donate Button
+                          /// Donation button → Navigate to Checkout
                           Center(
                             child: SizedBox(
                               width: double.infinity,
@@ -208,9 +228,7 @@ class DetailView extends StatelessWidget {
                                   Navigator.push(
                                     context,
                                     MaterialPageRoute(
-                                      builder: (_) => CheckoutPage(
-                                        id: id,
-                                      ),
+                                      builder: (_) => CheckoutPage(id: id),
                                     ),
                                   );
                                 },

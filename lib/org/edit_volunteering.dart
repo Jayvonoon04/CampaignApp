@@ -12,12 +12,14 @@ class EditVolunteeringPage extends StatefulWidget {
 class _EditVolunteeringPageState extends State<EditVolunteeringPage> {
   final _formKey = GlobalKey<FormState>();
 
+  // --- Form controllers ---
   late TextEditingController _titleController;
   late TextEditingController _descController;
   late TextEditingController _locationController;
   late TextEditingController _durationController;
   late TextEditingController _targetUsersController;
 
+  // --- Volunteering fields ---
   DateTime? _selectedDate;
   TimeOfDay? _startTime;
   TimeOfDay? _endTime;
@@ -28,29 +30,41 @@ class _EditVolunteeringPageState extends State<EditVolunteeringPage> {
   @override
   void initState() {
     super.initState();
+
+    // Load existing campaign data into input fields
     final data = widget.data;
+
     _titleController = TextEditingController(text: data['title'] ?? '');
     _descController = TextEditingController(text: data['desc'] ?? '');
     _locationController = TextEditingController(text: data['location'] ?? '');
-    _durationController = TextEditingController(text: data['duration']?.toString() ?? '');
-    _targetUsersController = TextEditingController(text: data['targetusers']?.toString() ?? '');
+    _durationController =
+        TextEditingController(text: data['duration']?.toString() ?? '');
+    _targetUsersController =
+        TextEditingController(text: data['targetusers']?.toString() ?? '');
 
-    final Timestamp? ts = data['date'];
-    _selectedDate = ts != null ? ts.toDate() : null;
+    // --- Date restoration (accept Timestamp or DateTime) ---
+    final dynamic rawDate = data['date'];
+    if (rawDate is Timestamp) {
+      _selectedDate = rawDate.toDate();
+    } else if (rawDate is DateTime) {
+      _selectedDate = rawDate;
+    }
 
-    // restore start & end times
-    if (data['start_time'] != null) {
+    // --- Time restoration (stored as clean "HH:mm") ---
+    if (data['start_time'] is String) {
       _startTime = _parseTimeOfDay(data['start_time']);
     }
-    if (data['end_time'] != null) {
+    if (data['end_time'] is String) {
       _endTime = _parseTimeOfDay(data['end_time']);
     }
 
+    // Live flag
     _live = data['live'].toString().toLowerCase() == 'true';
   }
 
   @override
   void dispose() {
+    // Clean up controllers to prevent memory leaks
     _titleController.dispose();
     _descController.dispose();
     _locationController.dispose();
@@ -59,66 +73,80 @@ class _EditVolunteeringPageState extends State<EditVolunteeringPage> {
     super.dispose();
   }
 
+  /// Convert "HH:mm" string into TimeOfDay
   TimeOfDay? _parseTimeOfDay(String time) {
     final parts = time.split(":");
     if (parts.length != 2) return null;
-    int hour = int.tryParse(parts[0]) ?? 0;
-    int minute = int.tryParse(parts[1].replaceAll(RegExp(r'[^0-9]'), "")) ?? 0;
+
+    final hour = int.tryParse(parts[0]) ?? 0;
+    final minute = int.tryParse(parts[1]) ?? 0;
+
     return TimeOfDay(hour: hour, minute: minute);
   }
 
+  /// Convert TimeOfDay to Firestore-friendly "HH:mm"
+  String _timeOfDayToString(TimeOfDay t) {
+    final hh = t.hour.toString().padLeft(2, '0');
+    final mm = t.minute.toString().padLeft(2, '0');
+    return '$hh:$mm';
+  }
+
+  /// Pick a new date from calendar
   Future<void> _pickDate() async {
     final now = DateTime.now();
+
     final picked = await showDatePicker(
       context: context,
       initialDate: _selectedDate ?? now,
       firstDate: now.subtract(const Duration(days: 365 * 5)),
       lastDate: now.add(const Duration(days: 365 * 5)),
     );
-    if (picked != null) {
-      setState(() {
-        _selectedDate = picked;
-      });
-    }
+
+    if (picked != null) setState(() => _selectedDate = picked);
   }
 
+  /// Pick volunteering start time
   Future<void> _pickStartTime() async {
     final picked = await showTimePicker(
       context: context,
       initialTime: _startTime ?? TimeOfDay.now(),
     );
-    if (picked != null) {
-      setState(() {
-        _startTime = picked;
-      });
-    }
+
+    if (picked != null) setState(() => _startTime = picked);
   }
 
+  /// Pick volunteering end time
   Future<void> _pickEndTime() async {
     final picked = await showTimePicker(
       context: context,
       initialTime: _endTime ?? TimeOfDay.now(),
     );
-    if (picked != null) {
-      setState(() {
-        _endTime = picked;
-      });
-    }
+
+    if (picked != null) setState(() => _endTime = picked);
+  }
+
+  int _toMinutes(TimeOfDay t) {
+    return t.hour * 60 + t.minute;
   }
 
   Future<void> _saveChanges() async {
     if (!_formKey.currentState!.validate()) return;
+
     if (_selectedDate == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Please select a date")),
-      );
-      return;
+      return _showMessage("Please select a date");
     }
+
+    // --- Time must be selected ---
     if (_startTime == null || _endTime == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Please select start and end time")),
-      );
-      return;
+      return _showMessage("Please select start and end time");
+    }
+
+    // --- Time validation: end time must be after start time ---
+    final startMinutes = _toMinutes(_startTime!);
+    final endMinutes = _toMinutes(_endTime!);
+
+    if (endMinutes <= startMinutes) {
+      return _showMessage("End time must be later than start time");
     }
 
     setState(() {
@@ -136,31 +164,25 @@ class _EditVolunteeringPageState extends State<EditVolunteeringPage> {
         'duration': double.tryParse(_durationController.text.trim()) ?? 0.0,
         'targetusers': int.tryParse(_targetUsersController.text.trim()) ?? 0,
         'date': Timestamp.fromDate(_selectedDate!),
-        'start_time': _startTime!.format(context),
-        'end_time': _endTime!.format(context),
+        'start_time': _timeOfDayToString(_startTime!),
+        'end_time': _timeOfDayToString(_endTime!),
         'live': _live,
       });
 
       if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Event updated successfully")),
-      );
-
+      _showMessage("Event updated successfully");
       Navigator.of(context).pop();
-
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Failed to update event: $e")),
-      );
+      _showMessage("Failed to update event: $e");
     } finally {
-      if (mounted) {
-        setState(() {
-          _isSaving = false;
-        });
-      }
+      if (mounted) setState(() => _isSaving = false);
     }
+  }
+
+  /// Quick reusable snackbar message
+  void _showMessage(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
   @override
@@ -173,21 +195,51 @@ class _EditVolunteeringPageState extends State<EditVolunteeringPage> {
         elevation: 1,
       ),
       backgroundColor: Colors.grey.shade50,
+
+      /// Main page body
       body: Padding(
         padding: const EdgeInsets.all(20),
+
         child: Form(
           key: _formKey,
+
           child: ListView(
             children: [
-              _buildTextField(_titleController, "Title", Icons.title,
-                  validator: (v) => v == null || v.trim().isEmpty ? "Title is required" : null),
+              // ---- TITLE ----
+              _buildTextField(
+                _titleController,
+                "Title",
+                Icons.title,
+                validator: (v) =>
+                v == null || v.trim().isEmpty ? "Title is required" : null,
+              ),
+
               const SizedBox(height: 16),
-              _buildTextField(_descController, "Description", Icons.description, maxLines: 3,
-                  validator: (v) => v == null || v.trim().isEmpty ? "Description is required" : null),
+
+              // ---- DESCRIPTION ----
+              _buildTextField(
+                _descController,
+                "Description",
+                Icons.description,
+                maxLines: 3,
+                validator: (v) =>
+                v == null || v.trim().isEmpty ? "Description is required" : null,
+              ),
+
               const SizedBox(height: 16),
-              _buildTextField(_locationController, "Location", Icons.location_on,
-                  validator: (v) => v == null || v.trim().isEmpty ? "Location is required" : null),
+
+              // ---- LOCATION ----
+              _buildTextField(
+                _locationController,
+                "Location",
+                Icons.location_on,
+                validator: (v) =>
+                v == null || v.trim().isEmpty ? "Location is required" : null,
+              ),
+
               const SizedBox(height: 16),
+
+              // ---- DURATION ----
               _buildTextField(
                 _durationController,
                 "Duration (hours, e.g. 1.5)",
@@ -195,11 +247,16 @@ class _EditVolunteeringPageState extends State<EditVolunteeringPage> {
                 keyboardType: TextInputType.number,
                 validator: (v) {
                   if (v == null || v.trim().isEmpty) return "Duration is required";
-                  if (double.tryParse(v.trim()) == null) return "Must be a number (e.g. 1.5)";
+                  if (double.tryParse(v.trim()) == null) {
+                    return "Must be a number (e.g. 1.5)";
+                  }
                   return null;
                 },
               ),
+
               const SizedBox(height: 16),
+
+              // ---- TARGET USERS ----
               _buildTextField(
                 _targetUsersController,
                 "Target Users",
@@ -211,9 +268,10 @@ class _EditVolunteeringPageState extends State<EditVolunteeringPage> {
                   return null;
                 },
               ),
+
               const SizedBox(height: 24),
 
-              // Date picker
+              // ---- DATE PICKER ----
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: const Icon(Icons.calendar_today, color: Colors.black54),
@@ -221,59 +279,54 @@ class _EditVolunteeringPageState extends State<EditVolunteeringPage> {
                   _selectedDate == null
                       ? "Select Date"
                       : "${_selectedDate!.day}/${_selectedDate!.month}/${_selectedDate!.year}",
-                  style: const TextStyle(fontSize: 16),
                 ),
                 trailing: IconButton(
-                  icon: const Icon(Icons.edit_calendar, color: Colors.black87),
+                  icon: const Icon(Icons.edit_calendar),
                   onPressed: _pickDate,
                 ),
               ),
 
-              // Start time picker
+              // ---- START TIME ----
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: const Icon(Icons.access_time, color: Colors.black54),
                 title: Text(
                   _startTime == null ? "Select Start Time" : _startTime!.format(context),
-                  style: const TextStyle(fontSize: 16),
                 ),
                 trailing: IconButton(
-                  icon: const Icon(Icons.schedule, color: Colors.black87),
+                  icon: const Icon(Icons.schedule),
                   onPressed: _pickStartTime,
                 ),
               ),
 
-              // End time picker
+              // ---- END TIME ----
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: const Icon(Icons.access_time_filled, color: Colors.black54),
                 title: Text(
                   _endTime == null ? "Select End Time" : _endTime!.format(context),
-                  style: const TextStyle(fontSize: 16),
                 ),
                 trailing: IconButton(
-                  icon: const Icon(Icons.schedule, color: Colors.black87),
+                  icon: const Icon(Icons.schedule),
                   onPressed: _pickEndTime,
                 ),
               ),
 
               const SizedBox(height: 24),
 
-              // Live switch
+              // ---- LIVE SWITCH ----
               SwitchListTile(
                 title: const Text("Live"),
                 value: _live,
-                onChanged: (val) {
-                  setState(() {
-                    _live = val;
-                  });
-                },
+                onChanged: (val) => setState(() => _live = val),
                 activeColor: Colors.green,
-                secondary: const Icon(Icons.wifi_tethering, color: Colors.black54),
+                secondary:
+                const Icon(Icons.wifi_tethering, color: Colors.black54),
               ),
 
               const SizedBox(height: 40),
 
+              // ---- SAVE BUTTON ----
               ElevatedButton(
                 onPressed: _isSaving ? null : _saveChanges,
                 style: ElevatedButton.styleFrom(
@@ -282,13 +335,15 @@ class _EditVolunteeringPageState extends State<EditVolunteeringPage> {
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                 ),
                 child: _isSaving
                     ? const SizedBox(
                   height: 20,
                   width: 20,
-                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                  child: CircularProgressIndicator(
+                    color: Colors.white,
+                    strokeWidth: 2,
+                  ),
                 )
                     : const Text("Save Changes"),
               ),
@@ -299,6 +354,7 @@ class _EditVolunteeringPageState extends State<EditVolunteeringPage> {
     );
   }
 
+  /// Reusable text field builder
   Widget _buildTextField(
       TextEditingController controller,
       String label,
@@ -318,23 +374,10 @@ class _EditVolunteeringPageState extends State<EditVolunteeringPage> {
         prefixIcon: Icon(icon, color: Colors.black54),
         filled: true,
         fillColor: Colors.white,
+        contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: Colors.grey.shade400),
         ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Colors.black87),
-        ),
-        errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Colors.redAccent),
-        ),
-        focusedErrorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Colors.redAccent),
-        ),
-        contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
       ),
       style: const TextStyle(color: Colors.black87),
     );

@@ -13,22 +13,35 @@ class OrgInfoPage extends StatefulWidget {
 }
 
 class _OrgInfoPageState extends State<OrgInfoPage> {
+  /// Global form key for validating the form
   final _formKey = GlobalKey<FormState>();
+
+  /// Controllers for organisation fields (website, address, description)
   final Map<String, TextEditingController> _controllers = {
     'website': TextEditingController(),
     'address': TextEditingController(),
     'description': TextEditingController(),
   };
 
+  /// URL of the banner image stored in Firebase Storage
   String? bannerUrl;
+
+  /// Locally picked image file (before upload)
   File? _pickedImage;
+
+  /// Whether the page is still loading existing org data
   bool _isLoading = true;
+
+  /// Whether we are currently saving data (used to disable button + show loader)
   bool _isSaving = false;
 
+  /// Current logged-in user ID (organisation account)
   final _userId = FirebaseAuth.instance.currentUser?.uid;
 
+  /// Fetch organisation info from Firestore and pre-fill the form
   Future<void> _fetchOrgData() async {
     if (_userId == null) return;
+
     final doc = await FirebaseFirestore.instance
         .collection('users')
         .doc(_userId)
@@ -38,18 +51,23 @@ class _OrgInfoPageState extends State<OrgInfoPage> {
 
     if (doc.exists) {
       final data = doc.data()!;
+      // Restore text fields
       for (var key in _controllers.keys) {
         _controllers[key]?.text = data[key] ?? '';
       }
+      // Restore banner image URL
       setState(() {
         bannerUrl = data['banner'];
       });
     }
+
+    // Mark loading as complete
     setState(() {
       _isLoading = false;
     });
   }
 
+  /// Open gallery and let user pick an image for the banner
   Future<void> _pickImage() async {
     final picker = ImagePicker();
     final picked = await picker.pickImage(source: ImageSource.gallery);
@@ -58,26 +76,36 @@ class _OrgInfoPageState extends State<OrgInfoPage> {
     }
   }
 
+  /// Validate and save organisation info (and banner) to Firestore
   Future<void> _saveOrgData() async {
+    // Validate form inputs
     if (!_formKey.currentState!.validate()) return;
+
     setState(() => _isSaving = true);
 
     String? uploadedUrl = bannerUrl;
 
+    // If user selected a new image, upload it to Firebase Storage
     if (_pickedImage != null && _userId != null) {
       final ref = FirebaseStorage.instance
           .ref()
           .child('org_banners')
-          .child('$_userId.jpg');
+          .child('$_userId.jpg'); // Store by userId for easy overwrite
+
+      // Upload file
       await ref.putFile(_pickedImage!);
+
+      // Get the uploaded image URL
       uploadedUrl = await ref.getDownloadURL();
     }
 
+    // Prepare data to save
     final Map<String, dynamic> dataToSave = {
       for (var key in _controllers.keys) key: _controllers[key]?.text.trim(),
       'banner': uploadedUrl,
     };
 
+    // Save/update org document under user
     await FirebaseFirestore.instance
         .collection('users')
         .doc(_userId)
@@ -90,6 +118,7 @@ class _OrgInfoPageState extends State<OrgInfoPage> {
       bannerUrl = uploadedUrl;
     });
 
+    // Show feedback
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Organization info saved successfully")),
@@ -100,11 +129,13 @@ class _OrgInfoPageState extends State<OrgInfoPage> {
   @override
   void initState() {
     super.initState();
+    // Load existing organisation data when screen is opened
     _fetchOrgData();
   }
 
   @override
   void dispose() {
+    // Dispose controllers to avoid memory leaks
     for (var c in _controllers.values) {
       c.dispose();
     }
@@ -128,6 +159,7 @@ class _OrgInfoPageState extends State<OrgInfoPage> {
         centerTitle: true,
       ),
       body: _isLoading
+      // Show loader while Firestore data is being fetched
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
         padding: const EdgeInsets.all(20),
@@ -135,7 +167,7 @@ class _OrgInfoPageState extends State<OrgInfoPage> {
           key: _formKey,
           child: Column(
             children: [
-              // Banner card
+              // ================== Banner card ==================
               Card(
                 elevation: 2,
                 shape: RoundedRectangleBorder(
@@ -143,29 +175,37 @@ class _OrgInfoPageState extends State<OrgInfoPage> {
                 ),
                 child: Column(
                   children: [
+                    // Banner preview (local file > network > placeholder)
                     ClipRRect(
                       borderRadius: const BorderRadius.vertical(
                           top: Radius.circular(16)),
                       child: _pickedImage != null
-                          ? Image.file(_pickedImage!,
-                          height: 180,
-                          width: double.infinity,
-                          fit: BoxFit.cover)
+                          ? Image.file(
+                        _pickedImage!,
+                        height: 180,
+                        width: double.infinity,
+                        fit: BoxFit.cover,
+                      )
                           : bannerUrl != null
-                          ? Image.network(bannerUrl!,
-                          height: 180,
-                          width: double.infinity,
-                          fit: BoxFit.cover)
+                          ? Image.network(
+                        bannerUrl!,
+                        height: 180,
+                        width: double.infinity,
+                        fit: BoxFit.cover,
+                      )
                           : Container(
                         height: 180,
                         color: Colors.grey.shade200,
                         child: const Center(
-                            child: Text(
-                                "No Banner Uploaded",
-                                style: TextStyle(
-                                    color: Colors.black54))),
+                          child: Text(
+                            "No Banner Uploaded",
+                            style: TextStyle(
+                                color: Colors.black54),
+                          ),
+                        ),
                       ),
                     ),
+                    // Upload button
                     Padding(
                       padding: const EdgeInsets.all(12),
                       child: ElevatedButton.icon(
@@ -188,7 +228,7 @@ class _OrgInfoPageState extends State<OrgInfoPage> {
 
               const SizedBox(height: 20),
 
-              // Info fields card
+              // ================== Info fields card ==================
               Card(
                 elevation: 2,
                 shape: RoundedRectangleBorder(
@@ -198,12 +238,18 @@ class _OrgInfoPageState extends State<OrgInfoPage> {
                   padding: const EdgeInsets.all(16),
                   child: Column(
                     children: [
+                      // Website field
                       _buildTextField('website', 'Website'),
                       const SizedBox(height: 16),
+                      // Address field
                       _buildTextField('address', 'Address'),
                       const SizedBox(height: 16),
-                      _buildTextField('description', 'Description',
-                          maxLines: 4),
+                      // Description field (multi-line)
+                      _buildTextField(
+                        'description',
+                        'Description',
+                        maxLines: 4,
+                      ),
                     ],
                   ),
                 ),
@@ -211,7 +257,7 @@ class _OrgInfoPageState extends State<OrgInfoPage> {
 
               const SizedBox(height: 30),
 
-              // Save button
+              // ================== Save button ==================
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
@@ -221,7 +267,9 @@ class _OrgInfoPageState extends State<OrgInfoPage> {
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     textStyle: const TextStyle(
-                        fontSize: 16, fontWeight: FontWeight.bold),
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -231,7 +279,9 @@ class _OrgInfoPageState extends State<OrgInfoPage> {
                     height: 22,
                     width: 22,
                     child: CircularProgressIndicator(
-                        color: Colors.white, strokeWidth: 2),
+                      color: Colors.white,
+                      strokeWidth: 2,
+                    ),
                   )
                       : const Text("Save Information"),
                 ),
@@ -243,6 +293,7 @@ class _OrgInfoPageState extends State<OrgInfoPage> {
     );
   }
 
+  /// Build a labelled text field for a given key in the controller map
   Widget _buildTextField(String key, String label, {int maxLines = 1}) {
     return TextFormField(
       controller: _controllers[key],
@@ -260,13 +311,14 @@ class _OrgInfoPageState extends State<OrgInfoPage> {
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide(color: Colors.grey.shade300),
         ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Colors.black, width: 1.2),
+        focusedBorder: const OutlineInputBorder(
+          borderRadius: BorderRadius.all(Radius.circular(12)),
+          borderSide: BorderSide(color: Colors.black, width: 1.2),
         ),
       ),
       maxLines: maxLines,
       validator: (value) {
+        // Simple non-empty validation for all fields
         if (value == null || value.trim().isEmpty) {
           return 'Please enter $label';
         }

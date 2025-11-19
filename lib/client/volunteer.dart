@@ -22,20 +22,30 @@ class VolunteeringDetailPage extends StatefulWidget {
 }
 
 class _VolunteeringDetailPageState extends State<VolunteeringDetailPage> {
+  // Volunteering event data from Firestore
   Map<String, dynamic>? data;
+
+  // Organization (event creator) data from Firestore
   Map<String, dynamic>? orgData;
+
+  // Loading flag for initial data fetch
   bool isLoading = true;
+
+  // Reason text entered by user when applying
   String reason = '';
+
+  // Logged-in user details
   String currentUserId = FirebaseAuth.instance.currentUser!.uid;
   String currentUserName = 'John Doe';
   String currentUserEmail = FirebaseAuth.instance.currentUser!.email!;
   String currentUserPhone = '';
 
+  // Participation status info for the current user
   String? userStatus;
   String? rejectionReason;
   String? attended;
 
-  /// 🚫 New flag to check if user is banned from this org
+  /// Whether this user is banned from this organization (based on reports)
   bool isBannedByOrg = false;
 
   @override
@@ -44,7 +54,9 @@ class _VolunteeringDetailPageState extends State<VolunteeringDetailPage> {
     fetchData();
   }
 
+  /// Fetch volunteering event, organization, report and participation data
   Future<void> fetchData() async {
+    // Get volunteering event document
     final doc = await FirebaseFirestore.instance
         .collection('volunteering')
         .doc(widget.volunteeringId)
@@ -55,7 +67,7 @@ class _VolunteeringDetailPageState extends State<VolunteeringDetailPage> {
     final dataMap = doc.data();
     final createdBy = dataMap?['userid'];
 
-    // Get org details
+    // Fetch organization details from users collection
     if (createdBy != null) {
       final orgDoc =
       await FirebaseFirestore.instance.collection("users").doc(createdBy).get();
@@ -63,7 +75,7 @@ class _VolunteeringDetailPageState extends State<VolunteeringDetailPage> {
         orgData = orgDoc.data();
       }
 
-      // ✅ Check if this org has reported current user and admin accepted it
+      // Check if current user was reported by this org and report was accepted
       final reportSnap = await FirebaseFirestore.instance
           .collection('reports')
           .where('orgId', isEqualTo: createdBy)
@@ -72,7 +84,7 @@ class _VolunteeringDetailPageState extends State<VolunteeringDetailPage> {
           .get();
 
       if (reportSnap.docs.isNotEmpty) {
-        // 🚫 Only consider as banned if NOT already approved or attended
+        // Check current participation data for this event
         final participantDoc = await FirebaseFirestore.instance
             .collection('volunteering')
             .doc(widget.volunteeringId)
@@ -85,17 +97,18 @@ class _VolunteeringDetailPageState extends State<VolunteeringDetailPage> {
           final bool hasAttended = participantData['attended'].toString() == 'true';
           final String status = participantData['status'] ?? '';
 
-          // ✅ If already approved or attended, do NOT ban from viewing certificate
+          // If already approved or attended, do NOT treat as banned for certificate
           if (!(hasAttended || status == 'approved')) {
             isBannedByOrg = true;
           }
         } else {
+          // No participation record → treat as banned
           isBannedByOrg = true;
         }
       }
     }
 
-    // Get user details
+    // Fetch logged-in user details
     final userDoc =
     await FirebaseFirestore.instance.collection("users").doc(currentUserId).get();
     if (userDoc.exists) {
@@ -104,7 +117,7 @@ class _VolunteeringDetailPageState extends State<VolunteeringDetailPage> {
       currentUserPhone = userData?['phone'] ?? '';
     }
 
-    // Get participation status
+    // Fetch participation status for current user for this event
     final participantDoc = await FirebaseFirestore.instance
         .collection('volunteering')
         .doc(widget.volunteeringId)
@@ -127,14 +140,15 @@ class _VolunteeringDetailPageState extends State<VolunteeringDetailPage> {
     });
   }
 
+  /// Submit participation application with reason and notify user
   Future<void> submitParticipation() async {
-    // ✅ Remove the manual empty reason check — handled by validator now
     final docRef = FirebaseFirestore.instance
         .collection('volunteering')
         .doc(widget.volunteeringId);
 
     final notificationRef = FirebaseFirestore.instance.collection("notifications");
 
+    // Create / overwrite participation record
     await docRef.collection('users').doc(currentUserId).set({
       'attended': false,
       'name': currentUserName,
@@ -145,6 +159,7 @@ class _VolunteeringDetailPageState extends State<VolunteeringDetailPage> {
       'description': reason,
     });
 
+    // Create notification for the user
     await notificationRef
         .doc(DateTime.timestamp().microsecondsSinceEpoch.toString())
         .set({
@@ -154,6 +169,7 @@ class _VolunteeringDetailPageState extends State<VolunteeringDetailPage> {
       'message': 'We received your application for volunteering event',
     });
 
+    // Cache volunteering ID locally in SharedPreferences
     final prefs = await SharedPreferences.getInstance();
     final existing = prefs.getString('volunteering') ?? '';
     final ids = existing.split('|');
@@ -173,6 +189,7 @@ class _VolunteeringDetailPageState extends State<VolunteeringDetailPage> {
     }
   }
 
+  /// Show modal bottom sheet for entering participation reason
   void showBottomSheet() {
     final TextEditingController reasonController = TextEditingController();
     final formKey = GlobalKey<FormState>();
@@ -217,9 +234,10 @@ class _VolunteeringDetailPageState extends State<VolunteeringDetailPage> {
                 ElevatedButton(
                   onPressed: () {
                     if (formKey.currentState!.validate()) {
+                      // Only submit if validation passes
                       reason = reasonController.text.trim();
                       submitParticipation();
-                      Navigator.pop(context); // close sheet after successful submission
+                      Navigator.pop(context); // Close sheet after submission
                     }
                   },
                   style: ElevatedButton.styleFrom(
@@ -240,9 +258,11 @@ class _VolunteeringDetailPageState extends State<VolunteeringDetailPage> {
     );
   }
 
+  /// Generate & open volunteer certificate PDF if conditions are satisfied
   void _printCertificate(BuildContext context) async {
     final eventDate = _formatDate(data?['date']);
 
+    // Only allow certificate after user attended AND event date has passed
     if (attended == 'true' && DateTime.now().isAfter(eventDate)) {
       final pdf = pw.Document();
 
@@ -253,6 +273,7 @@ class _VolunteeringDetailPageState extends State<VolunteeringDetailPage> {
       var userPhone = currentUserPhone;
       var userEmail = currentUserEmail;
 
+      // Random certificate ID
       final taxId = "TX-${Random().nextInt(999999).toString().padLeft(6, '0')}";
 
       pdf.addPage(
@@ -269,7 +290,7 @@ class _VolunteeringDetailPageState extends State<VolunteeringDetailPage> {
                 crossAxisAlignment: pw.CrossAxisAlignment.center,
                 mainAxisAlignment: pw.MainAxisAlignment.center,
                 children: [
-                  // 🏛️ Top Title
+                  // Certificate title
                   pw.Text(
                     'CERTIFICATE OF PARTICIPATION',
                     style: pw.TextStyle(
@@ -288,7 +309,7 @@ class _VolunteeringDetailPageState extends State<VolunteeringDetailPage> {
                   ),
                   pw.SizedBox(height: 24),
 
-                  // 📜 Intro Text
+                  // Intro text
                   pw.Text(
                     'This is proudly presented to',
                     style: const pw.TextStyle(
@@ -298,7 +319,7 @@ class _VolunteeringDetailPageState extends State<VolunteeringDetailPage> {
                   ),
                   pw.SizedBox(height: 12),
 
-                  // 👤 Participant Name
+                  // Participant name
                   pw.Text(
                     userName,
                     style: pw.TextStyle(
@@ -309,7 +330,7 @@ class _VolunteeringDetailPageState extends State<VolunteeringDetailPage> {
                   ),
                   pw.SizedBox(height: 12),
 
-                  // 🏆 Description
+                  // Description text
                   pw.Text(
                     'For actively participating in the volunteering event:',
                     style: const pw.TextStyle(fontSize: 14),
@@ -317,7 +338,7 @@ class _VolunteeringDetailPageState extends State<VolunteeringDetailPage> {
                   ),
                   pw.SizedBox(height: 8),
 
-                  // 📅 Event Name
+                  // Event title
                   pw.Text(
                     '"$eventName"',
                     style: pw.TextStyle(
@@ -337,8 +358,7 @@ class _VolunteeringDetailPageState extends State<VolunteeringDetailPage> {
                     'at $eventLocation',
                     style: const pw.TextStyle(fontSize: 13),
                   ),
-                  if (eventDuration != 0)
-                    pw.SizedBox(height: 6),
+                  if (eventDuration != 0) pw.SizedBox(height: 6),
                   if (eventDuration != 0)
                     pw.Text(
                       'Duration: $eventDuration hour(s)',
@@ -354,7 +374,7 @@ class _VolunteeringDetailPageState extends State<VolunteeringDetailPage> {
                   ),
                   pw.SizedBox(height: 20),
 
-                  // 📞 Contact and Info Section
+                  // Participant details
                   pw.Text(
                     'Participant Details:',
                     style: pw.TextStyle(
@@ -364,52 +384,24 @@ class _VolunteeringDetailPageState extends State<VolunteeringDetailPage> {
                     ),
                   ),
                   pw.SizedBox(height: 4),
-                  pw.Text('$userEmail • $userPhone', style: const pw.TextStyle(fontSize: 12)),
-                  pw.SizedBox(height: 10),
-                  pw.Text('Certificate ID: $taxId',
-                      style: pw.TextStyle(
-                          fontSize: 12,
-                          color: PdfColors.grey700,
-                          fontStyle: pw.FontStyle.italic)),
-                  pw.SizedBox(height: 20),
-
-                  // 🖋️ Signature Section
-                  pw.Row(
-                    mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                    children: [
-                      pw.Column(
-                        crossAxisAlignment: pw.CrossAxisAlignment.center,
-                        children: [
-                          pw.Container(
-                            width: 120,
-                            height: 1,
-                            color: PdfColors.black,
-                          ),
-                          pw.SizedBox(height: 4),
-                          pw.Text("Authorized Signature",
-                              style: const pw.TextStyle(fontSize: 12)),
-                        ],
-                      ),
-                      pw.Column(
-                        crossAxisAlignment: pw.CrossAxisAlignment.center,
-                        children: [
-                          pw.Container(
-                            width: 120,
-                            height: 1,
-                            color: PdfColors.black,
-                          ),
-                          pw.SizedBox(height: 4),
-                          pw.Text("Date: ${DateFormat('dd/MM/yyyy').format(DateTime.now())}",
-                              style: const pw.TextStyle(fontSize: 12)),
-                        ],
-                      ),
-                    ],
-                  ),
-                  pw.SizedBox(height: 30),
-
-                  // Footer thank-you message
                   pw.Text(
-                    '“Thank you for your valuable contribution to the community.”',
+                    '$userEmail | ${userPhone.isEmpty ? "Not provided" : userPhone}',
+                    style: const pw.TextStyle(fontSize: 12),
+                  ),
+                  pw.SizedBox(height: 10),
+                  pw.Text(
+                    'Certificate ID: $taxId',
+                    style: pw.TextStyle(
+                      fontSize: 12,
+                      color: PdfColors.grey700,
+                      fontStyle: pw.FontStyle.italic,
+                    ),
+                  ),
+                  pw.SizedBox(height: 24),
+
+                  // Footer thank-you text
+                  pw.Text(
+                    'Thank you for your valuable contribution to the community.',
                     style: pw.TextStyle(
                       fontStyle: pw.FontStyle.italic,
                       color: PdfColor.fromInt(0xFF7D6608),
@@ -424,25 +416,34 @@ class _VolunteeringDetailPageState extends State<VolunteeringDetailPage> {
         ),
       );
 
+      // Save PDF to temporary directory
       final output = await getTemporaryDirectory();
       final file = File("${output.path}/certificate.pdf");
       await file.writeAsBytes(await pdf.save());
 
+      // Navigate to certificate viewer screen
       Navigator.push(
         context,
         MaterialPageRoute(
           builder: (_) => CertificateViewer(pdfFile: file),
         ),
       );
-    } else if (attended != 'true') {
+    }
+    // Attendance not marked yet
+    else if (attended != 'true') {
       showDialog(
         context: context,
         builder: (_) => const AlertDialog(
-          title: Text('Not Verified'),
-          content: Text('Please wait until your attendance is verified.'),
+          title: Text('Attendance Not Marked'),
+          content: Text(
+            'Your attendance for this event has not been marked yet.\n'
+                'The certificate will be available after the organizer confirms your attendance.',
+          ),
         ),
       );
-    } else {
+    }
+    // Event not finished yet
+    else {
       showDialog(
         context: context,
         builder: (_) => const AlertDialog(
@@ -453,6 +454,7 @@ class _VolunteeringDetailPageState extends State<VolunteeringDetailPage> {
     }
   }
 
+  /// Convert Firestore timestamp / string to DateTime with safe fallback
   DateTime _formatDate(dynamic date) {
     return date is Timestamp
         ? date.toDate()
@@ -463,6 +465,7 @@ class _VolunteeringDetailPageState extends State<VolunteeringDetailPage> {
 
   @override
   Widget build(BuildContext context) {
+    // Simple loading screen while fetching data
     if (isLoading) {
       return const Scaffold(
         body: Center(child: CircularProgressIndicator()),
@@ -475,8 +478,9 @@ class _VolunteeringDetailPageState extends State<VolunteeringDetailPage> {
         backgroundColor: Colors.black,
         foregroundColor: Colors.white,
       ),
+      // Show participate FAB only if not banned and not already in a non-editable status
       floatingActionButton: (isBannedByOrg)
-          ? null // 🚫 Do not show Participate button
+          ? null
           : (userStatus == null || userStatus == 'rejected')
           ? FloatingActionButton.extended(
         backgroundColor: Colors.black,
@@ -490,9 +494,11 @@ class _VolunteeringDetailPageState extends State<VolunteeringDetailPage> {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
+            // Main volunteering info card
             Card(
               elevation: 4,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               child: Padding(
                 padding: const EdgeInsets.all(20),
                 child: Column(
@@ -523,11 +529,12 @@ class _VolunteeringDetailPageState extends State<VolunteeringDetailPage> {
             ),
             const SizedBox(height: 16),
 
-            // Org Details
+            // Organization details card (if available)
             if (orgData != null)
               Card(
                 elevation: 3,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                 color: Colors.grey.shade50,
                 child: Padding(
                   padding: const EdgeInsets.all(16),
@@ -590,7 +597,8 @@ class _VolunteeringDetailPageState extends State<VolunteeringDetailPage> {
                       const SizedBox(height: 8),
                       Row(
                         children: [
-                          const Icon(Icons.location_on, color: Colors.black54, size: 20),
+                          const Icon(Icons.location_on,
+                              color: Colors.black54, size: 20),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
@@ -607,24 +615,32 @@ class _VolunteeringDetailPageState extends State<VolunteeringDetailPage> {
 
             const SizedBox(height: 16),
 
+            // Banned banner
             if (isBannedByOrg)
               Card(
                 color: Colors.red.shade50,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
                 child: const ListTile(
                   leading: Icon(Icons.block, color: Colors.red),
                   title: Text("You are banned from this organization's campaigns"),
                   subtitle: Text("You cannot apply to this volunteering event."),
                 ),
               )
+            // Approved + attended → show certificate button
             else if (userStatus == 'approved')
-              Card(
+              (attended == 'true')
+                  ? Card(
                 color: Colors.green.shade50,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
                 child: ListTile(
-                  leading: const Icon(Icons.verified, color: Colors.green),
+                  leading:
+                  const Icon(Icons.verified, color: Colors.green),
                   title: const Text("You are approved for this event!"),
-                  subtitle: const Text("You can now print your certificate."),
+                  subtitle: const Text(
+                    "Your attendance has been marked. You can now view your certificate.",
+                  ),
                   trailing: ElevatedButton.icon(
                     onPressed: () => _printCertificate(context),
                     icon: const Icon(Icons.picture_as_pdf),
@@ -636,22 +652,42 @@ class _VolunteeringDetailPageState extends State<VolunteeringDetailPage> {
                   ),
                 ),
               )
+              // Approved but not yet attended → info only
+                  : Card(
+                color: Colors.green.shade50,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+                child: const ListTile(
+                  leading:
+                  Icon(Icons.verified, color: Colors.green),
+                  title: Text("You are approved for this event!"),
+                  subtitle: Text(
+                    "Your attendance has not been marked yet.\n"
+                        "You’ll be able to view your certificate once the organizer confirms your attendance.",
+                  ),
+                ),
+              )
+            // Rejected state
             else if (userStatus == 'rejected')
                 Card(
                   color: Colors.red.shade50,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
                   child: ListTile(
                     leading: const Icon(Icons.cancel, color: Colors.red),
                     title: const Text("Application Rejected"),
                     subtitle: Text("Reason: $rejectionReason"),
                   ),
                 )
+              // Pending state
               else if (userStatus == 'pending')
                   Card(
                     color: Colors.yellow.shade50,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
                     child: const ListTile(
-                      leading: Icon(Icons.hourglass_top, color: Colors.orange),
+                      leading:
+                      Icon(Icons.hourglass_top, color: Colors.orange),
                       title: Text("Application Pending"),
                       subtitle: Text("We are reviewing your application."),
                     ),
@@ -663,6 +699,7 @@ class _VolunteeringDetailPageState extends State<VolunteeringDetailPage> {
   }
 }
 
+/// Screen that displays a generated certificate PDF and provides share/print actions
 class CertificateViewer extends StatelessWidget {
   final File pdfFile;
 
@@ -676,18 +713,24 @@ class CertificateViewer extends StatelessWidget {
         backgroundColor: Colors.black,
         foregroundColor: Colors.white,
       ),
+      // PDF viewer widget
       body: SfPdfViewer.file(pdfFile),
+      // Bottom bar with share and print actions
       bottomNavigationBar: BottomAppBar(
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
+            // Share certificate PDF
             IconButton(
               icon: const Icon(Icons.share, color: Colors.blue),
               onPressed: () {
-                Share.shareXFiles([XFile(pdfFile.path)],
-                    text: "Here is my certificate!");
+                Share.shareXFiles(
+                  [XFile(pdfFile.path)],
+                  text: "Here is my certificate!",
+                );
               },
             ),
+            // Print certificate PDF
             IconButton(
               icon: const Icon(Icons.print, color: Colors.green),
               onPressed: () {

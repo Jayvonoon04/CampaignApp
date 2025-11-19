@@ -11,7 +11,10 @@ class UpcomingList extends StatefulWidget {
 }
 
 class _UpcomingListState extends State<UpcomingList> {
+  // Current logged-in user's UID
   final String uid = FirebaseAuth.instance.currentUser!.uid;
+
+  // Future holding the user's upcoming volunteering events
   late Future<List<Map<String, dynamic>>> _userEvents;
 
   @override
@@ -20,9 +23,11 @@ class _UpcomingListState extends State<UpcomingList> {
     _userEvents = _fetchUserVolunteeringEvents();
   }
 
+  /// Fetch upcoming volunteering events where the current user is approved
   Future<List<Map<String, dynamic>>> _fetchUserVolunteeringEvents() async {
     final now = DateTime.now();
 
+    // Get all volunteering events from today onwards
     final querySnapshot = await FirebaseFirestore.instance
         .collection('volunteering')
         .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(now))
@@ -34,7 +39,7 @@ class _UpcomingListState extends State<UpcomingList> {
     for (var doc in querySnapshot.docs) {
       final eventId = doc.id;
 
-      // Check if user exists in subcollection
+      // Check if the current user exists in the event's "users" subcollection
       final userDoc = await FirebaseFirestore.instance
           .collection('volunteering')
           .doc(eventId)
@@ -46,11 +51,11 @@ class _UpcomingListState extends State<UpcomingList> {
         final userData = userDoc.data()!;
         final status = userData['status'] ?? 'pending';
 
-        // ✅ Only include if status is approved
+        // Only include events where user status is approved
         if (status == 'approved') {
           final eventData = doc.data();
           final DateTime eventDate =
-          (eventData['date'] as Timestamp).toDate(); // Convert timestamp
+          (eventData['date'] as Timestamp).toDate(); // Firestore → DateTime
 
           userEvents.add({
             'eventId': eventId,
@@ -74,10 +79,15 @@ class _UpcomingListState extends State<UpcomingList> {
     return FutureBuilder<List<Map<String, dynamic>>>(
       future: _userEvents,
       builder: (context, snapshot) {
+        // Loading state
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: 16.0),
+            child: Center(child: CircularProgressIndicator()),
+          );
         }
 
+        // No upcoming approved events
         if (!snapshot.hasData || snapshot.data!.isEmpty) {
           return Column(
             children: [
@@ -86,7 +96,7 @@ class _UpcomingListState extends State<UpcomingList> {
                 width: double.infinity,
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
+                  color: Colors.white.withOpacity(0.9),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Column(
@@ -107,8 +117,9 @@ class _UpcomingListState extends State<UpcomingList> {
 
         final events = snapshot.data!;
 
+        // Horizontal scrollable list of upcoming events
         return SizedBox(
-          height: 180,
+          height: 190,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             itemCount: events.length,
@@ -118,6 +129,7 @@ class _UpcomingListState extends State<UpcomingList> {
               final eventDate = event['date'] as DateTime;
 
               return GestureDetector(
+                // Navigate to volunteering detail page on tap
                 onTap: () {
                   Navigator.push(
                     context,
@@ -129,48 +141,117 @@ class _UpcomingListState extends State<UpcomingList> {
                   );
                 },
                 child: Container(
-                  width: 230,
+                  width: 240,
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.blue.shade50,
-                    borderRadius: BorderRadius.circular(12),
+                    gradient: LinearGradient(
+                      colors: [
+                        Colors.blue.shade50,
+                        Colors.deepPurple.shade50,
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(14),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.05),
+                        blurRadius: 6,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(Icons.volunteer_activism,
-                          color: Colors.deepPurple),
+                      // Icon + status pill
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Icon(
+                            Icons.volunteer_activism,
+                            color: Colors.deepPurple,
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.green.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: Colors.green.withOpacity(0.5),
+                              ),
+                            ),
+                            child: const Text(
+                              'Approved',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.green,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                       const SizedBox(height: 8),
+                      // Event title
                       Text(
                         event['title'],
-                        style: const TextStyle(fontWeight: FontWeight.bold),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 4),
+                      // Event location
                       Text(
                         event['location'],
-                        style: const TextStyle(fontSize: 12),
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Colors.black54,
+                        ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '${eventDate.day}/${eventDate.month}/${eventDate.year}',
-                        style: const TextStyle(fontSize: 12),
+                      const SizedBox(height: 6),
+                      // Date row
+                      Row(
+                        children: [
+                          const Icon(Icons.calendar_today,
+                              size: 14, color: Colors.black54),
+                          const SizedBox(width: 4),
+                          Text(
+                            '${eventDate.day}/${eventDate.month}/${eventDate.year}',
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 2),
-                      Text(
-                        '${event['start_time']} - ${event['end_time']}',
-                        style: const TextStyle(fontSize: 12),
+                      // Time row
+                      Row(
+                        children: [
+                          const Icon(Icons.access_time,
+                              size: 14, color: Colors.black54),
+                          const SizedBox(width: 4),
+                          Text(
+                            '${event['start_time']} - ${event['end_time']}',
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 2),
+                      const Spacer(),
+                      // Hint text
                       Text(
-                        'Status: ${event['status']}',
-                        style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.green),
+                        'Tap to view details',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.deepPurple.shade400,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                     ],
                   ),
